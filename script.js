@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dom = {
         hud: document.getElementById('game-hud'), waveCounter: document.getElementById('wave-counter'), scoreCounter: document.getElementById('score-counter'),
         hpBar: document.getElementById('hp-bar'), hpValue: document.getElementById('hp-value'), xpBar: document.getElementById('xp-bar'),
+        hyperBar: document.getElementById('hyper-bar'), hyperValue: document.getElementById('hyper-value'),
         levelValue: document.getElementById('level-value'), overlay: document.getElementById('ui-overlay'), startMenu: document.getElementById('start-menu'),
         levelUpMenu: document.getElementById('level-up-menu'), gameOverMenu: document.getElementById('game-over-menu'),
         upgradeContainer: document.getElementById('upgrade-cards-container'), startButton: document.getElementById('start-button'),
@@ -22,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
-            animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null
+            animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
+            hyperspaceCharge: 0, hyperspaceActive: false
         };
     }
 
@@ -42,13 +44,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         update(dt) {
             // Use all keys as lowercase for consistency
-            if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * this.speed; this.vy += Math.sin(this.angle) * this.speed; createThrusterParticles(this); }
-            this.vx *= this.friction; this.vy *= this.friction;
+            if (state.hyperspaceActive) {
+                this.vx = Math.cos(this.angle) * this.speed * 4;
+                this.vy = Math.sin(this.angle) * this.speed * 4;
+            } else {
+                if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * this.speed; this.vy += Math.sin(this.angle) * this.speed; createThrusterParticles(this); }
+                this.vx *= this.friction; this.vy *= this.friction;
+                const targetAngle = Math.atan2(state.mouse.y - (this.y - state.camera.y), state.mouse.x - (this.x - state.camera.x));
+                let angleDiff = targetAngle - this.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2; while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                this.angle += angleDiff * this.rotationSpeed * dt;
+            }
             this.x += this.vx * dt; this.y += this.vy * dt;
-            const targetAngle = Math.atan2(state.mouse.y - (this.y - state.camera.y), state.mouse.x - (this.x - state.camera.x));
-            let angleDiff = targetAngle - this.angle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2; while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            this.angle += angleDiff * this.rotationSpeed * dt;
             this.weapons.forEach(w => w.update(dt));
             if (this.invincibleTimer > 0) { this.invincibleTimer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.invincibleTimer <= 0) this.invincible = false; }
             this.x = Math.max(0, Math.min(state.map.WIDTH, this.x));
@@ -583,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (region.spawned) return;
         region.spawned = true;
         region.enemies = [];
-        const perFaction = 30;
+        const perFaction = 50;
         let configs = [];
         if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
         else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
@@ -596,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
             enemy.region = region;
             enemy.active = false;
             enemy.isWave = false;
-            enemy.color = cfg.FACTION === FACTIONS.SAMA ? '#ffffff' : '#ffa500';
+            enemy.color = cfg.COLOR;
             region.enemies.push(enemy);
             state.enemies.push(enemy);
         }
@@ -716,6 +723,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function update(dt) {
         state.gameTime += dt;
+        if (!state.hyperspaceActive) {
+            if (state.keys[' ']) {
+                state.hyperspaceCharge += dt * (1000 / CONFIG.TARGET_FPS);
+                if (state.hyperspaceCharge >= CONFIG.HYPERSPACE.CHARGE_TIME) {
+                    state.hyperspaceActive = true;
+                    state.hyperspaceCharge = CONFIG.HYPERSPACE.CHARGE_TIME;
+                }
+            } else {
+                state.hyperspaceCharge = 0;
+            }
+        }
         // Remove old xp orbs
         state.xpOrbs = state.xpOrbs.filter(o => o.age < o.lifespan);
         // Cap particles to 500 at most
@@ -782,6 +800,14 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.hpBar.style.width = state.player.maxHp > 0 ? `${Math.max(0, Math.min(1, state.player.hp / state.player.maxHp)) * 100}%` : '0%';
         dom.levelValue.textContent = state.player.level;
         dom.xpBar.style.width = state.player.xpToNextLevel > 0 ? `${Math.max(0, Math.min(1, state.player.xp / state.player.xpToNextLevel)) * 100}%` : '0%';
+        if (state.hyperspaceActive) {
+            dom.hyperValue.textContent = 'ACTIVE';
+            dom.hyperBar.style.width = '100%';
+        } else {
+            const ratio = Math.max(0, Math.min(1, state.hyperspaceCharge / CONFIG.HYPERSPACE.CHARGE_TIME));
+            dom.hyperValue.textContent = `${Math.floor(ratio * 100)}%`;
+            dom.hyperBar.style.width = `${ratio * 100}%`;
+        }
 
         drawMiniMap();
         if (state.showMap) drawFullMap();
@@ -905,6 +931,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('keydown', e => {
             if(state) {
                 state.keys[e.key.toLowerCase()] = true;
+                if (e.code === 'Space' && state.hyperspaceActive) {
+                    state.hyperspaceActive = false;
+                    state.hyperspaceCharge = 0;
+                }
                 if (e.key.toLowerCase() === 'm') {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);

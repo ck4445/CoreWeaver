@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetherium Survivors: Genesis</title>
+    <meta name="description" content="A deep roguelite space arena survival game. Evolve your ship with a vast arsenal of unique weapons and powerful procedural upgrades.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="game-hud" class="hidden">
+        <div id="hud-top">
+            <div class="hud-stat">Wave: <span id="wave-counter">1</span></div>
+            <div class="hud-stat">Score: <span id="score-counter">0</span></div>
+        </div>
+        <div id="hud-bottom">
+            <div id="hp-bar-container" class="hud-bar-container">
+                <div id="hp-bar" class="hud-bar"></div>
+                <span class="hud-bar-label">Hull: <span id="hp-value">0/0</span></span>
+            </div>
+            <div id="xp-bar-container" class="hud-bar-container">
+                <div id="xp-bar" class="hud-bar"></div>
+                <span class="hud-bar-label">Level <span id="level-value">1</span> XP</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-overlay" class="active">
+        <div id="start-menu" class="menu-card">
+            <h1>Aetherium Survivors: Genesis</h1>
+            <p>Pilot your ship with <strong>WASD</strong> or <strong>Arrow Keys</strong>.</p>
+            <p>Aim and fire automatically with your <strong>Mouse</strong>.</p>
+            <p>Survive. Evolve. Conquer.</p>
+            <button id="start-button">Begin Run</button>
+        </div>
+
+        <div id="level-up-menu" class="menu-card hidden">
+            <h2>System Evolution</h2>
+            <p>Select a core system upgrade.</p>
+            <div id="upgrade-cards-container">
+                <!-- Upgrade cards will be generated here -->
+            </div>
+        </div>
+
+        <div id="game-over-menu" class="menu-card hidden">
+            <h2>Run Over</h2>
+            <p>The Aetherium has consumed you.</p>
+            <div class="final-stats">
+                <div>Final Score: <span id="final-score">0</span></div>
+                <div>Wave Reached: <span id="final-wave">0</span></div>
+            </div>
+            <button id="restart-button">Try Again</button>
+        </div>
+    </div>
+    
+    <audio id="bg-music" loop src="music.wav"></audio>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

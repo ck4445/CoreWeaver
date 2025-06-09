@@ -1,0 +1,201 @@
+:root {
+    --bg-color: #00000a;
+    --ui-bg-color: rgba(10, 20, 40, 0.85);
+    --text-color: #e0e5f0;
+    --accent-color: #00f5d4;
+    --accent-hover: #9b5de5;
+    --hp-color: #e63946;
+    --xp-color: #4f8dff;
+    --border-color: rgba(0, 245, 212, 0.3);
+    --shadow-color: rgba(0, 245, 212, 0.5);
+    --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+
+    /* Rarity Colors */
+    --common-color: #a0a0a0;
+    --uncommon-color: #5dd39e;
+    --rare-color: #4f8dff;
+    --epic-color: #9b5de5;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-family);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#gameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    cursor: crosshair;
+}
+
+#game-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+}
+#game-hud.hidden {
+    display: none;
+}
+#hud-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 20px;
+    font-weight: 600;
+    text-shadow: 0 0 5px var(--shadow-color);
+}
+#hud-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+.hud-bar-container {
+    width: 100%;
+    max-width: 400px;
+    background-color: rgba(0,0,0,0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 4px;
+    position: relative;
+    height: 28px;
+}
+.hud-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.2s ease-out;
+}
+#hp-bar { background-color: var(--hp-color); }
+#xp-bar { background-color: var(--xp-color); }
+.hud-bar-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: 600;
+    font-size: 14px;
+    text-shadow: 1px 1px 2px #000;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 10, 0.7);
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s ease;
+}
+#ui-overlay:not(.active) {
+    opacity: 0;
+    pointer-events: none;
+}
+.menu-card {
+    background-color: var(--ui-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 30px 40px;
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 25px var(--shadow-color);
+}
+.menu-card.hidden { display: none; }
+.menu-card h1 { font-size: 36px; color: var(--accent-color); margin-bottom: 20px; }
+.menu-card h2 { font-size: 28px; color: var(--accent-color); margin-bottom: 15px; }
+.menu-card p { margin-bottom: 20px; line-height: 1.6; opacity: 0.9; }
+.menu-card p strong { color: var(--accent-color); font-weight: 600; }
+
+button {
+    padding: 12px 25px;
+    background-color: transparent;
+    border: 2px solid var(--accent-color);
+    color: var(--accent-color);
+    border-radius: 5px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+button:hover {
+    background-color: var(--accent-color);
+    color: var(--bg-color);
+}
+
+#upgrade-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+.upgrade-card {
+    background-color: rgba(0,0,0,0.3);
+    border: 2px solid; /* color set by rarity class */
+    border-radius: 8px;
+    padding: 20px;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.upgrade-card:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 15px var(--shadow-color);
+}
+.upgrade-card h3 { margin-bottom: 5px; }
+.upgrade-card p { font-size: 14px; margin: 0; opacity: 0.8; }
+.upgrade-card .tag {
+    font-size: 12px;
+    font-weight: bold;
+    margin-top: 10px;
+    display: inline-block;
+}
+
+/* Rarity Styles */
+.upgrade-card.common { border-color: var(--common-color); }
+.upgrade-card.common h3 { color: var(--common-color); }
+.upgrade-card.uncommon { border-color: var(--uncommon-color); }
+.upgrade-card.uncommon h3 { color: var(--uncommon-color); }
+.upgrade-card.rare { border-color: var(--rare-color); }
+.upgrade-card.rare h3 { color: var(--rare-color); }
+.upgrade-card.epic { border-color: var(--epic-color); }
+.upgrade-card.epic h3 { color: var(--epic-color); }
+
+.final-stats {
+    margin: 30px 0;
+    font-size: 18px;
+    line-height: 1.8;
+}
+
+@media (max-width: 600px) {
+    #hud-top { font-size: 16px; }
+    .menu-card { padding: 25px; }
+    .menu-card h1 { font-size: 28px; }
+}

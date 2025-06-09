@@ -805,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-       canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
         dom.minimap.width = 200; dom.minimap.height = 200;
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; reCenterCamera(); });
         window.addEventListener('keydown', e => {

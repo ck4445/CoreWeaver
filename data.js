@@ -1,4 +1,3 @@
-
 'use strict';
 
 const FACTIONS = {
@@ -18,7 +17,7 @@ const CONFIG = {
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
     ENEMY: {
-        // All enemies now have a small amount of gravity
+        // All enemies now have a small amount of gravity and faction assignments
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
         SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
         TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },
@@ -28,16 +27,14 @@ const CONFIG = {
         CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },
         HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE },
         SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#b5838d', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
-        SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 10, XP: 12, COLOR: '#9a8c98', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA },
-        SAMA_SNIPER: { RADIUS: 11, HP: 20, SPEED: 0.8, DAMAGE: 12, XP: 15, COLOR: '#ffcad4', BEHAVIOR: 'shoot', FIRE_RATE: 2000, PREF_DIST: 300, GRAVITY: 2, FACTION: FACTIONS.SAMA },
     },
     MAP: {
         WIDTH: 9000,
         HEIGHT: 9000,
         REGIONS: [
-            { name: 'Pirate Space', faction: FACTIONS.PIRATE, color: '#331f20', x: 0, y: 0, width: 3000, height: 9000 },
-            { name: 'Dead Space', faction: null, color: '#222831', x: 3000, y: 0, width: 3000, height: 9000 },
-            { name: 'Sama Space', faction: FACTIONS.SAMA, color: '#203030', x: 6000, y: 0, width: 3000, height: 9000 },
+            { name: 'Pirate Space', faction: FACTIONS.PIRATE, x: 0, y: 0, width: 3000, height: 9000 },
+            { name: 'Dead Space', faction: null, x: 3000, y: 0, width: 3000, height: 9000 },
+            { name: 'Sama Space', faction: FACTIONS.SAMA, x: 6000, y: 0, width: 3000, height: 9000 },
         ],
     },
     WEAPONS: {

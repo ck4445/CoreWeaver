@@ -92,8 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > this.config.PREF_DIST) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+            if (dist > prefer) {
+                const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
+                this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
+            } else if (dist < prefer * 0.8) {
+                const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
+                this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+            }
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
             if (this.fireCooldown <= 0) {
                 const angle = Math.atan2(dy, dx);
@@ -382,21 +388,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const template = genericUpgradeTemplates[Math.floor(Math.random() * genericUpgradeTemplates.length)];
         const value = template.base * selectedRarity.multi;
         return {
-            isProcedural: true, name: `${template.name}: +${(value * 100).toFixed(0)}%`,
-            desc: `Increases your ${template.name.toLowerCase()} by ${(value * 100).toFixed(0)}%.`,
-            tag: template.tag, rarity: selectedRarity.color,
-            apply: (p) => { if (template.isHp) { p.maxHp *= (1 + value); p.hp += p.maxHp * value; } else { p[template.stat] += value; } }
+            isProcedural: true,
+            name: `${template.name} +${(value * 100).toFixed(0)}%`,
+            desc: `${template.desc} increased by ${(value * 100).toFixed(0)}%.`,
+            tag: template.tag,
+            rarity: selectedRarity.color,
+            apply: (p) => {
+                if (template.isHp) {
+                    p.maxHp *= (1 + value);
+                    p.hp += p.maxHp * value;
+                } else {
+                    p[template.stat] += value;
+                }
+            }
         };
     }
     function getUpgradeChoices() {
         const choices = [];
-        const availableWeapons = weaponUpgradePool.filter(upgradeData => {
-            const WeaponClass = weaponConstructors.get(upgradeData.id);
-            return !state.player.weapons.some(w => w instanceof WeaponClass);
-        });
-
-        if (availableWeapons.length > 0 && Math.random() < 0.4) { choices.push(availableWeapons[Math.floor(Math.random() * availableWeapons.length)]); }
-        while (choices.length < 3) { choices.push(generateProceduralUpgrade()); }
+        const player = state.player;
+        const maxWeapons = 5;
+        const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
+        if (weaponChoices.length) {
+            choices.push(weaponChoices[Math.floor(Math.random() * weaponChoices.length)]);
+        }
+        while (choices.length < 4) {
+            let pick = null;
+            if (Math.random() < 0.5 && weaponChoices.length > 0) {
+                const remaining = weaponChoices.filter(w => !choices.includes(w));
+                if (remaining.length) {
+                    pick = remaining[Math.floor(Math.random() * remaining.length)];
+                }
+            }
+            if (!pick) {
+                do { pick = generateProceduralUpgrade(); } while (choices.some(c => c.name === pick.name));
+            }
+            choices.push(pick);
+        }
         return choices.sort(() => Math.random() - 0.5);
     }
     function displayUpgradeChoices() {
@@ -404,7 +431,14 @@ document.addEventListener('DOMContentLoaded', () => {
         getUpgradeChoices().forEach(upgrade => {
             const card = document.createElement('div');
             card.className = `upgrade-card ${upgrade.rarity || 'uncommon'}`;
-            card.innerHTML = `<h3>${upgrade.name}</h3><p>${upgrade.desc}</p><span class="tag">${upgrade.tag}</span>`;
+            const title = document.createElement('h3');
+            title.textContent = upgrade.name;
+            const desc = document.createElement('p');
+            desc.textContent = upgrade.desc;
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = upgrade.tag;
+            card.append(title, desc, tag);
             card.onclick = () => selectUpgrade(upgrade);
             dom.upgradeContainer.appendChild(card);
         });
@@ -415,13 +449,8 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade.apply(player);
         } else {
             const WeaponClass = weaponConstructors.get(upgrade.id);
-            if (WeaponClass) {
-                const existingWeapon = player.weapons.find(w => w instanceof WeaponClass);
-                if (existingWeapon && existingWeapon.addOrb) {
-                    existingWeapon.addOrb();
-                } else {
-                    player.weapons.push(new WeaponClass(player));
-                }
+            if (WeaponClass && player.weapons.length < 5) {
+                player.weapons.push(new WeaponClass(player));
             }
         }
         setGameState('PLAYING');
@@ -455,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resumeGame() { if (!state.animationFrameId) { state.lastTime = performance.now(); state.animationFrameId = requestAnimationFrame(gameLoop); } }
     function nextWave() {
         state.wave++;
-        const numEnemies = 10 + state.wave * 5;
+        const numEnemies = 8 + state.wave * 4;
         const waveEnemyTypes = [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER];
         if (state.wave > 1) waveEnemyTypes.push(CONFIG.ENEMY.TANK);
         if (state.wave > 2) waveEnemyTypes.push(CONFIG.ENEMY.SHOOTER);
@@ -544,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (spatialGrid.has(key)) {
                         for (const source of spatialGrid.get(key)) {
                             if (entity === source || entity.owner === source || !source.gravity) continue;
+                            if (entity instanceof Projectile && source instanceof Projectile) continue;
                             const dx = source.x - entity.x;
                             const dy = source.y - entity.y;
                             const distSq = dx * dx + dy * dy;
@@ -664,6 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('keydown', e => { if(state) state.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
+        document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
         state = getInitialState();

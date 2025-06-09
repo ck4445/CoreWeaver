@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let state, musicStarted = false;
-    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null }; }
+    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null }; }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
 
@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.angle += angleDiff * this.rotationSpeed * dt;
             this.weapons.forEach(w => w.update(dt));
             if (this.invincibleTimer > 0) { this.invincibleTimer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.invincibleTimer <= 0) this.invincible = false; }
+            this.x = Math.max(0, Math.min(state.map.WIDTH, this.x));
+            this.y = Math.max(0, Math.min(state.map.HEIGHT, this.y));
         }
         draw() {
             ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
@@ -63,8 +65,34 @@ document.addEventListener('DOMContentLoaded', () => {
             super(x, y, config.RADIUS);
             this.config = config; this.maxHp = config.HP; this.hp = this.maxHp; this.speed = config.SPEED; this.damage = config.DAMAGE; this.xpValue = config.XP;
             this.color = config.COLOR; this.mass = config.RADIUS / 5; this.gravity = config.GRAVITY || 0;
+            this.faction = config.FACTION || FACTIONS.NEUTRAL;
+            this.behavior = config.BEHAVIOR || 'chase';
+            this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
         }
-        update(dt) { const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist > 0) { const moveX = (dx / dist) * this.speed; const moveY = (dy / dist) * this.speed; this.x += moveX * dt; this.y += moveY * dt; } }
+        update(dt) {
+            const target = this.findTarget();
+            if (target) {
+                const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            } else if (this.behavior === 'wander') {
+                this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+                if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
+                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
+                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
+            } else {
+                const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            }
+        }
+        findTarget() {
+            let best = null; let bestDistSq = Infinity;
+            for (const e of state.enemies) {
+                if (e === this || e.faction === this.faction) continue;
+                const dx = e.x - this.x; const dy = e.y - this.y; const distSq = dx * dx + dy * dy;
+                if (distSq < bestDistSq && distSq < 90000) { best = e; bestDistSq = distSq; }
+            }
+            return best;
+        }
         draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
         takeDamage(damageInfo) {
             this.hp -= damageInfo.amount;
@@ -408,15 +436,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const player = state.player;
         const maxWeapons = 5;
         const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
+        let weaponCount = 0;
         if (weaponChoices.length) {
-            choices.push(weaponChoices[Math.floor(Math.random() * weaponChoices.length)]);
+            const first = weaponChoices.splice(Math.floor(Math.random() * weaponChoices.length), 1)[0];
+            choices.push(first);
+            weaponCount = 1;
         }
         while (choices.length < 4) {
             let pick = null;
-            if (Math.random() < 0.5 && weaponChoices.length > 0) {
+            if (weaponCount < 2 && Math.random() < 0.5 && weaponChoices.length > 0) {
                 const remaining = weaponChoices.filter(w => !choices.includes(w));
                 if (remaining.length) {
-                    pick = remaining[Math.floor(Math.random() * remaining.length)];
+                    pick = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+                    weaponCount++;
                 }
             }
             if (!pick) {
@@ -476,7 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!musicStarted) { bgMusic.play().catch(e => console.log("Audio couldn't play:", e)); musicStarted = true; }
         const keys = state ? state.keys : {}; const mouse = state ? state.mouse : { x: 0, y: 0 };
         state = getInitialState(); state.keys = keys; state.mouse = mouse;
-        state.player = new Player(canvas.width / 2, canvas.height / 2);
+        state.player = new Player(state.map.WIDTH / 2, state.map.HEIGHT / 2);
+        state.camera.x = state.player.x - canvas.width / 2;
+        state.camera.y = state.player.y - canvas.height / 2;
+        spawnFactionForces();
         nextWave();
         setGameState('PLAYING');
     }
@@ -508,6 +543,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function spawnFactionForces() {
+        const perFaction = 15;
+        CONFIG.MAP.REGIONS.forEach(region => {
+            let config = null;
+            if (region.faction === FACTIONS.PIRATE) config = CONFIG.ENEMY.CHASER;
+            else if (region.faction === FACTIONS.SAMA) config = CONFIG.ENEMY.SAMA_TROOP;
+            if (!config) return;
+            for (let i = 0; i < perFaction; i++) {
+                const x = region.x + Math.random() * region.width;
+                const y = region.y + Math.random() * region.height;
+                state.enemies.push(Enemy.create(config, x, y));
+            }
+        });
+    }
+
     let spatialGrid;
 
     function handleCollisions() {
@@ -529,6 +579,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (e2 instanceof Player && e1 instanceof XpOrb) { e2.addXp(e1.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e1); }
                 else if (e1 instanceof Projectile && e2 instanceof Enemy) handleProjectileEnemy(e1, e2);
                 else if (e2 instanceof Projectile && e1 instanceof Enemy) handleProjectileEnemy(e2, e1);
+                else if (e1 instanceof Enemy && e2 instanceof Enemy && e1.faction !== e2.faction) {
+                    e1.takeDamage({amount: e2.damage, isCrit: false});
+                    e2.takeDamage({amount: e1.damage, isCrit: false});
+                }
                 else if (e1 instanceof Player && e2 instanceof EnemyProjectile) e1.takeDamage(e2.getDamage().amount);
                 else if (e2 instanceof Player && e1 instanceof EnemyProjectile) e2.takeDamage(e1.getDamage().amount);
                 else if (e1 instanceof Drone && e2 instanceof Enemy) { e2.takeDamage({amount: e1.config.DRONE_DMG, isCrit: false}); e1.takeDamage(); }

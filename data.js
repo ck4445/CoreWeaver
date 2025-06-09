@@ -1,5 +1,11 @@
 'use strict';
 
+const FACTIONS = {
+    PIRATE: 'Pirate',
+    SAMA: 'Sama',
+    NEUTRAL: 'Neutral',
+};
+
 const CONFIG = {
     PLAYER: {
         RADIUS: 12, MAX_HP: 100, SPEED: 1.7, ROTATION_SPEED: 0.08, FRICTION: 0.9, INVINCIBILITY_DURATION: 1000, MAGNET_RADIUS: 120,
@@ -11,15 +17,25 @@ const CONFIG = {
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
     ENEMY: {
-        // All enemies now have a small amount of gravity
-        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2 },
-        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1 },
-        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10 },
-        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#277da1', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3 },
-        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#f9c74f', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5 },
-        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200 }, // Graviton remains a super-source
-        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1 },
-        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2 },
+        // All enemies now have a small amount of gravity and faction assignments
+        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
+        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
+        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },
+        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#277da1', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE },
+        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#f9c74f', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5, FACTION: FACTIONS.PIRATE },
+        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE }, // Graviton remains a super-source
+        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },
+        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE },
+        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#b5838d', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
+    },
+    MAP: {
+        WIDTH: 9000,
+        HEIGHT: 9000,
+        REGIONS: [
+            { name: 'Pirate Space', faction: FACTIONS.PIRATE, x: 0, y: 0, width: 3000, height: 9000 },
+            { name: 'Dead Space', faction: null, x: 3000, y: 0, width: 3000, height: 9000 },
+            { name: 'Sama Space', faction: FACTIONS.SAMA, x: 6000, y: 0, width: 3000, height: 9000 },
+        ],
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity

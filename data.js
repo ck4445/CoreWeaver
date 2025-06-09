@@ -6,10 +6,17 @@ const FACTIONS = {
     NEUTRAL: 'Neutral',
 };
 
+function rectsOverlap(a, b) {
+    return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+             a.y + a.height <= b.y || b.y + b.height <= a.y);
+}
+
 function generateMapRegions(width, height) {
     const regions = [];
     const count = 20;
-    for (let i = 0; i < count; i++) {
+    let attempts = 0;
+    while (regions.length < count && attempts < count * 50) {
+        attempts++;
         const w = 800 + Math.random() * 1200;
         const h = 800 + Math.random() * 1200;
         const x = Math.random() * (width - w);
@@ -28,7 +35,8 @@ function generateMapRegions(width, height) {
             name = 'Sama Enclave';
             color = '#203030';
         }
-        regions.push({ name, faction, color, x, y, width: w, height: h });
+        const region = { name, faction, color, x, y, width: w, height: h };
+        if (regions.every(r => !rectsOverlap(r, region))) regions.push(region);
     }
     return regions;
 }
@@ -58,9 +66,9 @@ const CONFIG = {
         SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#4a4e69', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
     },
     MAP: {
-        WIDTH: 9000,
-        HEIGHT: 9000,
-        REGIONS: generateMapRegions(9000, 9000),
+        WIDTH: 367200,
+        HEIGHT: 367200,
+        REGIONS: generateMapRegions(367200, 367200),
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity

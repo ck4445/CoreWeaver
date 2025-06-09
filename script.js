@@ -72,11 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
-            const target = this.findTarget();
+            let target = this.findTarget();
+            if (this.isWave && !target) target = state.player;
             if (target) {
                 const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
-            } else if (this.behavior === 'wander') {
+            } else if (this.behavior === 'wander' || !this.isWave) {
                 this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
                 if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
                 this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
@@ -122,19 +123,28 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const enemyTarget = this.findTarget();
-            const player = state.player; const target = enemyTarget || player;
-            const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
-            if (dist > prefer) {
-                const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
-                this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
-            } else if (dist < prefer * 0.8) {
-                const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
-                this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+            let target = this.findTarget();
+            if (this.isWave && !target) target = state.player;
+            const moveTarget = this.isWave ? (target || state.player) : target;
+            if (moveTarget) {
+                const dx = moveTarget.x - this.x; const dy = moveTarget.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+                if (dist > prefer) {
+                    const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
+                    this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
+                } else if (dist < prefer * 0.8) {
+                    const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
+                    this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+                }
+            } else if (!this.isWave) {
+                this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+                if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
+                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
+                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
             }
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
-            if (this.fireCooldown <= 0) {
-                const angle = Math.atan2(dy, dx);
+            if (this.fireCooldown <= 0 && moveTarget) {
+                const angle = Math.atan2(moveTarget.y - this.y, moveTarget.x - this.x);
                 state.projectiles.push(new EnemyProjectile(this.x, this.y, angle, { ...this.config, SPEED: 3, RADIUS: 4, DAMAGE: this.damage }, this));
                 this.fireCooldown = this.config.FIRE_RATE;
             }

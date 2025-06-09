@@ -1,4 +1,11 @@
+
 'use strict';
+
+const FACTIONS = {
+    PIRATE: 'Pirate',
+    SAMA: 'Sama',
+    NEUTRAL: 'Neutral',
+};
 
 const CONFIG = {
     PLAYER: {
@@ -7,19 +14,29 @@ const CONFIG = {
         GRAVITY: 100, // Player is a significant gravity source
     },
     PHYSICS: {
-        GRAVITY_CONSTANT: 60, // Lowered significantly to balance universal gravity
+        GRAVITY_CONSTANT: 20, // Reduced further to minimize projectile attraction
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
     ENEMY: {
         // All enemies now have a small amount of gravity
-        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2 },
-        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1 },
-        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10 },
-        SHOOTER: { RADIUS: 11, HP: 30, SPEED: 0.7, DAMAGE: 15, XP: 15, COLOR: '#277da1', BEHAVIOR: 'shoot', FIRE_RATE: 2000, PREF_DIST: 250, GRAVITY: 3 },
-        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#f9c74f', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5 },
-        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200 }, // Graviton remains a super-source
-        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1 },
-        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2 },
+        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
+        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
+        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },
+        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#277da1', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE },
+        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#f9c74f', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5, FACTION: FACTIONS.PIRATE },
+        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE }, // Graviton remains a super-source
+        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },
+        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE },
+        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#b5838d', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
+    },
+    MAP: {
+        WIDTH: 9000,
+        HEIGHT: 9000,
+        REGIONS: [
+            { name: 'Pirate Space', faction: FACTIONS.PIRATE, x: 0, y: 0, width: 3000, height: 9000 },
+            { name: 'Dead Space', faction: null, x: 3000, y: 0, width: 3000, height: 9000 },
+            { name: 'Sama Space', faction: FACTIONS.SAMA, x: 6000, y: 0, width: 3000, height: 9000 },
+        ],
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity
@@ -41,29 +58,29 @@ const CONFIG = {
 
 // --- The rest of data.js (weaponUpgradePool, etc.) remains unchanged. ---
 const weaponUpgradePool = [
-    { id: 'add_cannon', name: 'New Weapon: Basic Cannon', desc: 'Fires a steady stream of projectiles.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof BasicCannon)) p.weapons.push(new BasicCannon(p)); } },
-    { id: 'add_shard_launcher', name: 'New Weapon: Shard Launcher', desc: 'Periodically unleashes a nova of piercing shards.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof ShardLauncher)) p.weapons.push(new ShardLauncher(p)); } },
-    { id: 'add_orbiting_shield', name: 'New Weapon: Orbiting Shield', desc: 'Summons a shield that damages enemies on contact.', tag: 'NEW WEAPON', apply: (p) => { const w = p.weapons.find(w=>w instanceof OrbitingShield); if(w) w.addOrb(); else p.weapons.push(new OrbitingShield(p)); } },
-    { id: 'add_homing_missile', name: 'New Weapon: Homing Missile', desc: 'Launches missiles that seek the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof HomingMissileLauncher)) p.weapons.push(new HomingMissileLauncher(p)); } },
-    { id: 'add_laser_beam', name: 'New Weapon: Laser Beam', desc: 'Fires a continuous beam at the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof LaserBeam)) p.weapons.push(new LaserBeam(p)); } },
-    { id: 'add_mine_layer', name: 'New Weapon: Mine Layer', desc: 'Drops proximity mines that explode.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof MineLayer)) p.weapons.push(new MineLayer(p)); } },
-    { id: 'add_kinetic_blade', name: 'New Weapon: Kinetic Blade', desc: 'A short-range energy slash that hits multiple enemies.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof KineticBlade)) p.weapons.push(new KineticBlade(p)); } },
-    { id: 'add_railgun', name: 'New Weapon: Railgun', desc: 'Fires a high-velocity, piercing shot.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof RailgunWeapon)) p.weapons.push(new RailgunWeapon(p)); } },
-    { id: 'add_chain_lightning', name: 'New Weapon: Chain Lightning', desc: 'Unleashes a bolt that jumps between enemies.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof ChainLightningWeapon)) p.weapons.push(new ChainLightningWeapon(p)); } },
-    { id: 'add_black_hole', name: 'New Weapon: Black Hole', desc: 'Launches a singularity that pulls in and destroys foes.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof BlackHoleWeapon)) p.weapons.push(new BlackHoleWeapon(p)); } },
-    { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof DroneFactoryWeapon)) p.weapons.push(new DroneFactoryWeapon(p)); } },
-    { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(!p.weapons.find(w=>w instanceof ForceFieldWeapon)) p.weapons.push(new ForceFieldWeapon(p)); } },
+    { id: 'add_cannon', name: 'New Weapon: Basic Cannon', desc: 'Fires a steady stream of projectiles.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new BasicCannon(p)); } },
+    { id: 'add_shard_launcher', name: 'New Weapon: Shard Launcher', desc: 'Periodically unleashes a nova of piercing shards.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ShardLauncher(p)); } },
+    { id: 'add_orbiting_shield', name: 'New Weapon: Orbiting Shield', desc: 'Summons a shield that damages enemies on contact.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new OrbitingShield(p)); } },
+    { id: 'add_homing_missile', name: 'New Weapon: Homing Missile', desc: 'Launches missiles that seek the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new HomingMissileLauncher(p)); } },
+    { id: 'add_laser_beam', name: 'New Weapon: Laser Beam', desc: 'Fires a continuous beam at the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new LaserBeam(p)); } },
+    { id: 'add_mine_layer', name: 'New Weapon: Mine Layer', desc: 'Drops proximity mines that explode.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new MineLayer(p)); } },
+    { id: 'add_kinetic_blade', name: 'New Weapon: Kinetic Blade', desc: 'A short-range energy slash that hits multiple enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new KineticBlade(p)); } },
+    { id: 'add_railgun', name: 'New Weapon: Railgun', desc: 'Fires a high-velocity, piercing shot.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new RailgunWeapon(p)); } },
+    { id: 'add_chain_lightning', name: 'New Weapon: Chain Lightning', desc: 'Unleashes a bolt that jumps between enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ChainLightningWeapon(p)); } },
+    { id: 'add_black_hole', name: 'New Weapon: Black Hole', desc: 'Launches a singularity that pulls in and destroys foes.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new BlackHoleWeapon(p)); } },
+    { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new DroneFactoryWeapon(p)); } },
+    { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ForceFieldWeapon(p)); } },
 ];
 const genericUpgradeTemplates = [
-    { name: 'Weapon Systems', stat: 'damageMultiplier', base: 0.05, tag: 'OFFENSE' },
-    { name: 'Fire Control', stat: 'fireRateMultiplier', base: 0.04, tag: 'OFFENSE' },
-    { name: 'Crit Chance', stat: 'critChance', base: 0.03, tag: 'OFFENSE' },
-    { name: 'Crit Damage', stat: 'critDamage', base: 0.10, tag: 'OFFENSE' },
-    { name: 'Projectile Velocity', stat: 'projectileSpeedMultiplier', base: 0.08, tag: 'UTILITY' },
-    { name: 'Area of Effect', stat: 'areaMultiplier', base: 0.10, tag: 'UTILITY' },
-    { name: 'Hull Integrity', stat: 'maxHp', base: 0.15, tag: 'DEFENSE', isHp: true },
-    { name: 'Engine Power', stat: 'speed', base: 0.05, tag: 'DEFENSE' },
-    { name: 'Aetherium Magnet', stat: 'magnetRadius', base: 0.15, tag: 'UTILITY' },
+    { name: 'Damage', stat: 'damageMultiplier', base: 0.05, tag: 'OFFENSE', desc: 'Weapon damage' },
+    { name: 'Fire Rate', stat: 'fireRateMultiplier', base: 0.04, tag: 'OFFENSE', desc: 'Weapon fire rate' },
+    { name: 'Crit Chance', stat: 'critChance', base: 0.03, tag: 'OFFENSE', desc: 'Chance to deal critical hits' },
+    { name: 'Crit Damage', stat: 'critDamage', base: 0.10, tag: 'OFFENSE', desc: 'Critical hit damage' },
+    { name: 'Projectile Speed', stat: 'projectileSpeedMultiplier', base: 0.08, tag: 'UTILITY', desc: 'Projectile velocity' },
+    { name: 'Area of Effect', stat: 'areaMultiplier', base: 0.10, tag: 'UTILITY', desc: 'Weapon area and range' },
+    { name: 'Max Hull', stat: 'maxHp', base: 0.15, tag: 'DEFENSE', isHp: true, desc: 'Maximum hull integrity' },
+    { name: 'Movement Speed', stat: 'speed', base: 0.05, tag: 'DEFENSE', desc: 'Ship movement speed' },
+    { name: 'Magnet Radius', stat: 'magnetRadius', base: 0.15, tag: 'UTILITY', desc: 'Aetherium pickup radius' },
 ];
 const rarityTiers = {
     common: { weight: 10, multi: 1, color: 'common' },

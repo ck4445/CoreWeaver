@@ -92,8 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > this.config.PREF_DIST) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+            if (dist > prefer) {
+                const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
+                this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
+            } else if (dist < prefer * 0.8) {
+                const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
+                this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+            }
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
             if (this.fireCooldown <= 0) {
                 const angle = Math.atan2(dy, dx);
@@ -404,7 +410,14 @@ document.addEventListener('DOMContentLoaded', () => {
         getUpgradeChoices().forEach(upgrade => {
             const card = document.createElement('div');
             card.className = `upgrade-card ${upgrade.rarity || 'uncommon'}`;
-            card.innerHTML = `<h3>${upgrade.name}</h3><p>${upgrade.desc}</p><span class="tag">${upgrade.tag}</span>`;
+            const title = document.createElement('h3');
+            title.textContent = upgrade.name;
+            const desc = document.createElement('p');
+            desc.textContent = upgrade.desc;
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = upgrade.tag;
+            card.append(title, desc, tag);
             card.onclick = () => selectUpgrade(upgrade);
             dom.upgradeContainer.appendChild(card);
         });
@@ -664,6 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('keydown', e => { if(state) state.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
+        document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
         state = getInitialState();

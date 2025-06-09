@@ -12,35 +12,42 @@ function rectsOverlap(a, b) {
 }
 
 function generateMapRegions(width, height) {
+    const cols = 6, rows = 6;
+    const cellW = Math.floor(width / cols);
+    const cellH = Math.floor(height / rows);
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            cells.push({ x: c * cellW, y: r * cellH, width: cellW, height: cellH });
+        }
+    }
+    for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+    const pirateCount = Math.floor(cells.length * 0.25);
+    const samaCount = Math.floor(cells.length * 0.25);
     const regions = [];
-    const count = 20;
-    let attempts = 0;
-    while (regions.length < count && attempts < count * 50) {
-        attempts++;
-        const w = 15000 + Math.random() * 10000;
-        const h = 15000 + Math.random() * 10000;
-        const x = Math.random() * (width - w);
-        const y = Math.random() * (height - h);
+    cells.forEach((cell, idx) => {
         let faction, name, color, music;
-        if (Math.random() < 0.7) {
-            faction = null;
-            name = 'Dead Space';
-            color = '#222831';
-            music = 'dead_space.ogg';
-        } else if (Math.random() < 0.5) {
+        if (idx < pirateCount) {
             faction = FACTIONS.PIRATE;
             name = 'Pirate Outpost';
             color = '#331f20';
             music = 'pirate_outpost.ogg';
-        } else {
+        } else if (idx < pirateCount + samaCount) {
             faction = FACTIONS.SAMA;
             name = 'Sama Enclave';
             color = '#203030';
             music = 'sama_enclave.ogg';
+        } else {
+            faction = null;
+            name = 'Dead Space';
+            color = '#222831';
+            music = 'dead_space.ogg';
         }
-        const region = { name, faction, color, music, x, y, width: w, height: h };
-        if (regions.every(r => !rectsOverlap(r, region))) regions.push(region);
-    }
+        regions.push({ ...cell, name, faction, color, music });
+    });
     return regions;
 }
 
@@ -54,6 +61,7 @@ const CONFIG = {
         GRAVITY_CONSTANT: 20, // Reduced further to minimize projectile attraction
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
+    HYPERSPACE: { CHARGE_TIME: 300000 },
     ENEMY: {
         // All enemies now have a small amount of gravity and faction assignments
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },

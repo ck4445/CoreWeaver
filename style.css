@@ -6,6 +6,7 @@
     --accent-hover: #9b5de5;
     --hp-color: #e63946;
     --xp-color: #4f8dff;
+    --hyper-color: #9b5de5;
     --border-color: rgba(0, 245, 212, 0.3);
     --shadow-color: rgba(0, 245, 212, 0.5);
     --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
@@ -90,6 +91,7 @@ html, body {
 }
 #hp-bar { background-color: var(--hp-color); }
 #xp-bar { background-color: var(--xp-color); }
+#hyper-bar { background-color: var(--hyper-color); }
 .hud-bar-label {
     position: absolute;
     top: 50%;

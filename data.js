@@ -51,6 +51,7 @@ const CONFIG = {
         BLACK_HOLE: { FIRE_RATE: 5000, DAMAGE: 100, SPEED: 2, RADIUS: 10, COLOR: '#3c096c', DURATION: 3000, GRAVITY: 350, EXPLOSION_RADIUS: 120 }, // Black hole remains the ultimate gravity source
         DRONE_FACTORY: { FIRE_RATE: 4000, DRONE_HP: 10, DRONE_DMG: 15, DRONE_SPD: 2.5, DRONE_RADIUS: 5, COLOR: '#e09f3e', GRAVITY: 4 },
         FORCE_FIELD: { FIRE_RATE: 2500, RADIUS: 150, DURATION: 200, PUSH_FORCE: 25, COLOR: '#ade8f4', GRAVITY: 0 },
+        SAMA_PULSE: { FIRE_RATE: 800, DAMAGE: 20, SPEED: 6, RADIUS: 4, COLOR: '#b5838d', GRAVITY: 1 },
     },
     PARTICLE_LIFESPAN: 1000, SPATIAL_GRID_CELL_SIZE: 150, TARGET_FPS: 60,
 };
@@ -69,6 +70,7 @@ const weaponUpgradePool = [
     { id: 'add_black_hole', name: 'New Weapon: Black Hole', desc: 'Launches a singularity that pulls in and destroys foes.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new BlackHoleWeapon(p)); } },
     { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new DroneFactoryWeapon(p)); } },
     { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ForceFieldWeapon(p)); } },
+    { id: 'add_sama_pulse', name: 'New Weapon: Sama Pulse', desc: 'Powerful shots obtainable only in Sama Space.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new SamaPulseGun(p)); } },
 ];
 const genericUpgradeTemplates = [
     { name: 'Damage', stat: 'damageMultiplier', base: 0.05, tag: 'OFFENSE', desc: 'Weapon damage' },

@@ -12,10 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
         levelUpMenu: document.getElementById('level-up-menu'), gameOverMenu: document.getElementById('game-over-menu'),
         upgradeContainer: document.getElementById('upgrade-cards-container'), startButton: document.getElementById('start-button'),
         restartButton: document.getElementById('restart-button'), finalScore: document.getElementById('final-score'), finalWave: document.getElementById('final-wave'),
+        minimap: document.getElementById('minimap'), mapOverlay: document.getElementById('map-overlay'), mapCanvas: document.getElementById('map-canvas'),
     };
 
     let state, musicStarted = false;
-    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null }; }
+    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null, showMap: false, levelUpRegion: null }; }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
 
@@ -56,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createExplosion(this.x, this.y, '#e63946', 10); if (this.hp <= 0) { this.hp = 0; setGameState('GAME_OVER'); }
         }
         addXp(amount) {
-            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; setGameState('LEVEL_UP'); }
+            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; state.levelUpRegion = getRegionFor(this.x, this.y); setGameState('LEVEL_UP'); }
         }
     }
 
@@ -120,7 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+            const enemyTarget = this.findTarget();
+            const player = state.player; const target = enemyTarget || player;
+            const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
             if (dist > prefer) {
                 const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
                 this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
@@ -393,6 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     class ForceFieldWeapon extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.FORCE_FIELD }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new ForcePulseProjectile(this.owner.x, this.owner.y, this.config, this.owner)); } }
 
+    class SamaPulseGun extends Weapon {
+        constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SAMA_PULSE }; this.fireRate = this.config.FIRE_RATE; }
+        fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Projectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+    }
+
     const weaponConstructors = new Map([
         ['add_cannon', BasicCannon],
         ['add_shard_launcher', ShardLauncher],
@@ -406,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ['add_black_hole', BlackHoleWeapon],
         ['add_drone_factory', DroneFactoryWeapon],
         ['add_force_field', ForceFieldWeapon],
+        ['add_sama_pulse', SamaPulseGun],
     ]);
 
     function generateProceduralUpgrade() {
@@ -436,6 +445,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const player = state.player;
         const maxWeapons = 5;
         const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
+        if (player.weapons.length < maxWeapons && state.levelUpRegion && state.levelUpRegion.faction === FACTIONS.SAMA) {
+            const sama = weaponUpgradePool.find(w => w.id === 'add_sama_pulse');
+            if (sama) weaponChoices.push(sama);
+        }
         let weaponCount = 0;
         if (weaponChoices.length) {
             const first = weaponChoices.splice(Math.floor(Math.random() * weaponChoices.length), 1)[0];
@@ -546,16 +559,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function spawnFactionForces() {
         const perFaction = 15;
         CONFIG.MAP.REGIONS.forEach(region => {
-            let config = null;
-            if (region.faction === FACTIONS.PIRATE) config = CONFIG.ENEMY.CHASER;
-            else if (region.faction === FACTIONS.SAMA) config = CONFIG.ENEMY.SAMA_TROOP;
-            if (!config) return;
+            let configs = [];
+            if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
+            else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
+            if (!configs.length) return;
             for (let i = 0; i < perFaction; i++) {
                 const x = region.x + Math.random() * region.width;
                 const y = region.y + Math.random() * region.height;
-                state.enemies.push(Enemy.create(config, x, y));
+                const cfg = configs[Math.floor(Math.random() * configs.length)];
+                state.enemies.push(Enemy.create(cfg, x, y));
             }
         });
+    }
+
+    function getRegionFor(x, y) {
+        return CONFIG.MAP.REGIONS.find(r => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) || null;
     }
 
     let spatialGrid;
@@ -673,6 +691,20 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.globalAlpha = 1;
         state.xpOrbs.forEach(o => o.draw());
         state.enemies.forEach(e => e.draw());
+        // enemy hover labels
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        state.enemies.forEach(e => {
+            const screenX = e.x - state.camera.x;
+            const screenY = e.y - state.camera.y;
+            const dx = state.mouse.x - screenX;
+            const dy = state.mouse.y - screenY;
+            if (dx*dx + dy*dy < (e.radius + 8) * (e.radius + 8)) {
+                const type = Object.keys(CONFIG.ENEMY).find(k => CONFIG.ENEMY[k] === e.config) || 'Enemy';
+                ctx.fillText(type.replace(/_/g,' '), e.x, e.y - e.radius - 10);
+            }
+        });
         state.drones.forEach(d => d.draw());
         state.player.draw();
         ctx.globalCompositeOperation = 'lighter';
@@ -687,6 +719,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.hpBar.style.width = state.player.maxHp > 0 ? `${Math.max(0, Math.min(1, state.player.hp / state.player.maxHp)) * 100}%` : '0%';
         dom.levelValue.textContent = state.player.level;
         dom.xpBar.style.width = state.player.xpToNextLevel > 0 ? `${Math.max(0, Math.min(1, state.player.xp / state.player.xpToNextLevel)) * 100}%` : '0%';
+
+        drawMiniMap();
+        if (state.showMap) drawFullMap();
     }
 
     function gameLoop(timestamp) {
@@ -735,6 +770,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.particles.length < 500) state.particles.push(p);
     }
 
+    function drawMiniMap() {
+        const mCtx = dom.minimap.getContext('2d');
+        const scaleX = dom.minimap.width / state.map.WIDTH;
+        const scaleY = dom.minimap.height / state.map.HEIGHT;
+        mCtx.clearRect(0,0,dom.minimap.width, dom.minimap.height);
+        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        mCtx.fillStyle = '#00f5d4';
+        mCtx.beginPath();
+        mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 3, 0, Math.PI*2);
+        mCtx.fill();
+    }
+
+    function drawFullMap() {
+        const canvasMap = dom.mapCanvas;
+        const mCtx = canvasMap.getContext('2d');
+        canvasMap.width = Math.min(state.map.WIDTH/10, window.innerWidth*0.8);
+        canvasMap.height = Math.min(state.map.HEIGHT/10, window.innerHeight*0.8);
+        const scaleX = canvasMap.width / state.map.WIDTH;
+        const scaleY = canvasMap.height / state.map.HEIGHT;
+        mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
+        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        mCtx.fillStyle = '#00f5d4';
+        mCtx.beginPath();
+        mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 5, 0, Math.PI*2);
+        mCtx.fill();
+    }
+
     function reCenterCamera() {
         if (state && state.player) {
             state.camera.x = state.player.x - canvas.width / 2;
@@ -744,8 +806,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function init() {
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        dom.minimap.width = 200; dom.minimap.height = 200;
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; reCenterCamera(); });
-        window.addEventListener('keydown', e => { if(state) state.keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keydown', e => {
+            if(state) {
+                state.keys[e.key.toLowerCase()] = true;
+                if (e.key.toLowerCase() === 'm') {
+                    state.showMap = !state.showMap;
+                    dom.mapOverlay.classList.toggle('visible', state.showMap);
+                }
+            }
+        });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
         document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });

@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.faction = config.FACTION || FACTIONS.NEUTRAL;
             this.behavior = config.BEHAVIOR || 'chase';
             this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
+            this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
             const target = this.findTarget();

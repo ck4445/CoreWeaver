@@ -16,7 +16,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let state, musicStarted = false;
-    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null, showMap: false, levelUpRegion: null }; }
+    const MINIMAP_VIEW = 30000;
+    let mapZoom = 0.25;
+    function getInitialState() {
+        return {
+            gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
+            mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
+            animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null
+        };
+    }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
 
@@ -535,7 +543,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.player = new Player(state.map.WIDTH / 2, state.map.HEIGHT / 2);
         state.camera.x = state.player.x - canvas.width / 2;
         state.camera.y = state.player.y - canvas.height / 2;
-        spawnFactionForces();
+        const region = getRegionFor(state.player.x, state.player.y);
+        state.currentRegion = region;
+        if (region) {
+            spawnEnemiesForRegion(region);
+            activateRegion(region);
+            updateMusic(region);
+        }
         nextWave();
         setGameState('PLAYING');
     }
@@ -543,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resumeGame() { if (!state.animationFrameId) { state.lastTime = performance.now(); state.animationFrameId = requestAnimationFrame(gameLoop); } }
     function nextWave() {
         state.wave++;
-        const numEnemies = 8 + state.wave * 4;
+        const numEnemies = 12 + state.wave * 6;
         const waveEnemyTypes = [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER];
         if (state.wave > 1) waveEnemyTypes.push(CONFIG.ENEMY.TANK);
         if (state.wave > 2) waveEnemyTypes.push(CONFIG.ENEMY.SHOOTER);
@@ -565,24 +579,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function spawnFactionForces() {
-        const perFaction = 15;
-        CONFIG.MAP.REGIONS.forEach(region => {
-            let configs = [];
-            if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
-            else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
-            if (!configs.length) return;
-            for (let i = 0; i < perFaction; i++) {
-                const x = region.x + Math.random() * region.width;
-                const y = region.y + Math.random() * region.height;
-                const cfg = configs[Math.floor(Math.random() * configs.length)];
-                const enemy = Enemy.create(cfg, x, y);
-                if (cfg.FACTION === FACTIONS.SAMA) enemy.color = '#ffffff';
-                else enemy.color = '#ffa500';
-                enemy.isWave = false;
-                state.enemies.push(enemy);
-            }
-        });
+    function spawnEnemiesForRegion(region) {
+        if (region.spawned) return;
+        region.spawned = true;
+        region.enemies = [];
+        const perFaction = 30;
+        let configs = [];
+        if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
+        else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
+        if (!configs.length) return;
+        for (let i = 0; i < perFaction; i++) {
+            const x = region.x + Math.random() * region.width;
+            const y = region.y + Math.random() * region.height;
+            const cfg = configs[Math.floor(Math.random() * configs.length)];
+            const enemy = Enemy.create(cfg, x, y);
+            enemy.region = region;
+            enemy.active = false;
+            enemy.isWave = false;
+            enemy.color = cfg.FACTION === FACTIONS.SAMA ? '#ffffff' : '#ffa500';
+            region.enemies.push(enemy);
+            state.enemies.push(enemy);
+        }
+    }
+
+    function activateRegion(region) {
+        if (!region || !region.enemies) return;
+        region.enemies.forEach(e => e.active = true);
+    }
+
+    function deactivateRegion(region) {
+        if (!region || !region.enemies) return;
+        region.enemies.forEach(e => e.active = false);
+    }
+
+    function updateMusic(region) {
+        if (!region) return;
+        if (bgMusic.getAttribute('src') !== region.music) {
+            bgMusic.pause();
+            bgMusic.src = region.music;
+            bgMusic.play().catch(e => console.log("Audio couldn't play:", e));
+        }
     }
 
     function getRegionFor(x, y) {
@@ -593,7 +629,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleCollisions() {
         spatialGrid = new Map();
-        const allEntities = [state.player, ...state.enemies, ...state.projectiles, ...state.xpOrbs, ...state.drones];
+        const activeEnemies = state.enemies.filter(e => e.isWave || e.active);
+        const allEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.xpOrbs, ...state.drones];
         for (const entity of allEntities) {
             if (!entity) continue;
             const key = `${Math.floor(entity.x / CONFIG.SPATIAL_GRID_CELL_SIZE)}|${Math.floor(entity.y / CONFIG.SPATIAL_GRID_CELL_SIZE)}`;
@@ -645,7 +682,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleGravity(dt) {
         if (!spatialGrid) return;
         const G = CONFIG.PHYSICS.GRAVITY_CONSTANT;
-        const physicalEntities = [state.player, ...state.enemies, ...state.projectiles, ...state.drones];
+        const activeEnemies = state.enemies.filter(e => e.isWave || e.active);
+        const physicalEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.drones];
 
         for (const entity of physicalEntities) {
             if (!entity) continue;
@@ -683,7 +721,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Cap particles to 500 at most
         state.particles = state.particles.slice(-500);
         state.player.update(dt);
-        state.enemies.forEach(e => e.update(dt));
+        const region = getRegionFor(state.player.x, state.player.y);
+        if (region !== state.currentRegion) {
+            deactivateRegion(state.currentRegion);
+            state.currentRegion = region;
+            if (region) {
+                spawnEnemiesForRegion(region);
+                activateRegion(region);
+                updateMusic(region);
+            }
+        }
+        state.enemies.forEach(e => { if (e.isWave || e.active) e.update(dt); });
         state.projectiles.forEach(p => p.update(dt));
         state.drones.forEach(d => d.update(dt));
         state.xpOrbs.forEach(o => o.update(dt));
@@ -704,12 +752,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.particles.forEach(p => p.draw());
         ctx.globalAlpha = 1;
         state.xpOrbs.forEach(o => o.draw());
-        state.enemies.forEach(e => e.draw());
+        state.enemies.forEach(e => { if (e.isWave || e.active) e.draw(); });
         // enemy hover labels
         ctx.fillStyle = '#fff';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         state.enemies.forEach(e => {
+            if (!e.isWave && !e.active) return;
             const screenX = e.x - state.camera.x;
             const screenY = e.y - state.camera.y;
             const dx = state.mouse.x - screenX;
@@ -786,32 +835,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawMiniMap() {
         const mCtx = dom.minimap.getContext('2d');
-        const scaleX = dom.minimap.width / state.map.WIDTH;
-        const scaleY = dom.minimap.height / state.map.HEIGHT;
+        const view = MINIMAP_VIEW;
+        let minX = Math.max(0, Math.min(state.map.WIDTH - view, state.player.x - view/2));
+        let minY = Math.max(0, Math.min(state.map.HEIGHT - view, state.player.y - view/2));
+        const scaleX = dom.minimap.width / view;
+        const scaleY = dom.minimap.height / view;
         mCtx.clearRect(0,0,dom.minimap.width, dom.minimap.height);
         CONFIG.MAP.REGIONS.forEach(r => {
+            const rx = r.x - minX, ry = r.y - minY;
+            if (rx + r.width < 0 || ry + r.height < 0 || rx > view || ry > view) return;
             mCtx.fillStyle = r.color || '#444';
-            mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+            mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
             mCtx.fillStyle = '#fff';
             mCtx.font = '10px sans-serif';
             mCtx.textAlign = 'center';
-            mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
+            mCtx.fillText(r.name, (rx + r.width/2)*scaleX, (ry + r.height/2)*scaleY);
         });
         state.enemies.forEach(e => {
-            mCtx.fillStyle = e.color;
-            mCtx.fillRect(e.x*scaleX-1, e.y*scaleY-1, 2, 2);
+            if (!e.isWave && !e.active) return;
+            const ex = (e.x - minX) * scaleX;
+            const ey = (e.y - minY) * scaleY;
+            mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
+            mCtx.fillRect(ex-1, ey-1, 2, 2);
         });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
-        mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 3, 0, Math.PI*2);
+        mCtx.arc((state.player.x-minX)*scaleX, (state.player.y-minY)*scaleY, 3, 0, Math.PI*2);
         mCtx.fill();
     }
 
     function drawFullMap() {
         const canvasMap = dom.mapCanvas;
         const mCtx = canvasMap.getContext('2d');
-        canvasMap.width = Math.min(state.map.WIDTH/10, window.innerWidth*0.8);
-        canvasMap.height = Math.min(state.map.HEIGHT/10, window.innerHeight*0.8);
+        canvasMap.width = Math.min(state.map.WIDTH * mapZoom, window.innerWidth*0.8);
+        canvasMap.height = Math.min(state.map.HEIGHT * mapZoom, window.innerHeight*0.8);
         const scaleX = canvasMap.width / state.map.WIDTH;
         const scaleY = canvasMap.height / state.map.HEIGHT;
         mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
@@ -824,7 +881,8 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
         });
         state.enemies.forEach(e => {
-            mCtx.fillStyle = e.color;
+            if (!e.isWave && !e.active) return;
+            mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
             mCtx.fillRect(e.x*scaleX-2, e.y*scaleY-2, 4, 4);
         });
         mCtx.fillStyle = '#00f5d4';
@@ -851,6 +909,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);
                 }
+                if (state.showMap && (e.key === '+' || e.key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
+                if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
             }
         });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });

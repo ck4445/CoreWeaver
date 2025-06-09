@@ -17,25 +17,28 @@ function generateMapRegions(width, height) {
     let attempts = 0;
     while (regions.length < count && attempts < count * 50) {
         attempts++;
-        const w = 800 + Math.random() * 1200;
-        const h = 800 + Math.random() * 1200;
+        const w = 15000 + Math.random() * 10000;
+        const h = 15000 + Math.random() * 10000;
         const x = Math.random() * (width - w);
         const y = Math.random() * (height - h);
-        let faction, name, color;
+        let faction, name, color, music;
         if (Math.random() < 0.7) {
             faction = null;
             name = 'Dead Space';
             color = '#222831';
+            music = 'dead_space.ogg';
         } else if (Math.random() < 0.5) {
             faction = FACTIONS.PIRATE;
             name = 'Pirate Outpost';
             color = '#331f20';
+            music = 'pirate_outpost.ogg';
         } else {
             faction = FACTIONS.SAMA;
             name = 'Sama Enclave';
             color = '#203030';
+            music = 'sama_enclave.ogg';
         }
-        const region = { name, faction, color, x, y, width: w, height: h };
+        const region = { name, faction, color, music, x, y, width: w, height: h };
         if (regions.every(r => !rectsOverlap(r, region))) regions.push(region);
     }
     return regions;

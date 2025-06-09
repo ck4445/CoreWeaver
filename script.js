@@ -111,7 +111,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return best;
         }
-        draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            const outline = FACTION_OUTLINE_COLORS[this.faction];
+            if (outline) {
+                ctx.strokeStyle = outline;
+                ctx.lineWidth = Math.max(2, this.radius * 0.3);
+                ctx.stroke();
+            }
+        }
         takeDamage(damageInfo) {
             this.hp -= damageInfo.amount;
             if (damageInfo.isCrit) createCritIndicator(this.x, this.y, damageInfo.amount);

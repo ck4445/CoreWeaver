@@ -388,21 +388,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const template = genericUpgradeTemplates[Math.floor(Math.random() * genericUpgradeTemplates.length)];
         const value = template.base * selectedRarity.multi;
         return {
-            isProcedural: true, name: `${template.name}: +${(value * 100).toFixed(0)}%`,
-            desc: `Increases your ${template.name.toLowerCase()} by ${(value * 100).toFixed(0)}%.`,
-            tag: template.tag, rarity: selectedRarity.color,
-            apply: (p) => { if (template.isHp) { p.maxHp *= (1 + value); p.hp += p.maxHp * value; } else { p[template.stat] += value; } }
+            isProcedural: true,
+            name: `${template.name} +${(value * 100).toFixed(0)}%`,
+            desc: `${template.desc} increased by ${(value * 100).toFixed(0)}%.`,
+            tag: template.tag,
+            rarity: selectedRarity.color,
+            apply: (p) => {
+                if (template.isHp) {
+                    p.maxHp *= (1 + value);
+                    p.hp += p.maxHp * value;
+                } else {
+                    p[template.stat] += value;
+                }
+            }
         };
     }
     function getUpgradeChoices() {
         const choices = [];
-        const availableWeapons = weaponUpgradePool.filter(upgradeData => {
-            const WeaponClass = weaponConstructors.get(upgradeData.id);
-            return !state.player.weapons.some(w => w instanceof WeaponClass);
-        });
-
-        if (availableWeapons.length > 0 && Math.random() < 0.4) { choices.push(availableWeapons[Math.floor(Math.random() * availableWeapons.length)]); }
-        while (choices.length < 3) { choices.push(generateProceduralUpgrade()); }
+        const player = state.player;
+        const maxWeapons = 5;
+        const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
+        if (weaponChoices.length) {
+            choices.push(weaponChoices[Math.floor(Math.random() * weaponChoices.length)]);
+        }
+        while (choices.length < 4) {
+            let pick = null;
+            if (Math.random() < 0.5 && weaponChoices.length > 0) {
+                const remaining = weaponChoices.filter(w => !choices.includes(w));
+                if (remaining.length) {
+                    pick = remaining[Math.floor(Math.random() * remaining.length)];
+                }
+            }
+            if (!pick) {
+                do { pick = generateProceduralUpgrade(); } while (choices.some(c => c.name === pick.name));
+            }
+            choices.push(pick);
+        }
         return choices.sort(() => Math.random() - 0.5);
     }
     function displayUpgradeChoices() {
@@ -428,13 +449,8 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade.apply(player);
         } else {
             const WeaponClass = weaponConstructors.get(upgrade.id);
-            if (WeaponClass) {
-                const existingWeapon = player.weapons.find(w => w instanceof WeaponClass);
-                if (existingWeapon && existingWeapon.addOrb) {
-                    existingWeapon.addOrb();
-                } else {
-                    player.weapons.push(new WeaponClass(player));
-                }
+            if (WeaponClass && player.weapons.length < 5) {
+                player.weapons.push(new WeaponClass(player));
             }
         }
         setGameState('PLAYING');

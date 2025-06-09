@@ -12,10 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
         levelUpMenu: document.getElementById('level-up-menu'), gameOverMenu: document.getElementById('game-over-menu'),
         upgradeContainer: document.getElementById('upgrade-cards-container'), startButton: document.getElementById('start-button'),
         restartButton: document.getElementById('restart-button'), finalScore: document.getElementById('final-score'), finalWave: document.getElementById('final-wave'),
+        minimap: document.getElementById('minimap'), mapOverlay: document.getElementById('map-overlay'), mapCanvas: document.getElementById('map-canvas'),
     };
 
     let state, musicStarted = false;
-    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null }; }
+    function getInitialState() { return { gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {}, mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0, animationFrameId: null, showMap: false, levelUpRegion: null }; }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
 
@@ -42,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.angle += angleDiff * this.rotationSpeed * dt;
             this.weapons.forEach(w => w.update(dt));
             if (this.invincibleTimer > 0) { this.invincibleTimer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.invincibleTimer <= 0) this.invincible = false; }
+            this.x = Math.max(0, Math.min(state.map.WIDTH, this.x));
+            this.y = Math.max(0, Math.min(state.map.HEIGHT, this.y));
         }
         draw() {
             ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
@@ -54,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createExplosion(this.x, this.y, '#e63946', 10); if (this.hp <= 0) { this.hp = 0; setGameState('GAME_OVER'); }
         }
         addXp(amount) {
-            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; setGameState('LEVEL_UP'); }
+            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; state.levelUpRegion = getRegionFor(this.x, this.y); setGameState('LEVEL_UP'); }
         }
     }
 
@@ -63,8 +66,34 @@ document.addEventListener('DOMContentLoaded', () => {
             super(x, y, config.RADIUS);
             this.config = config; this.maxHp = config.HP; this.hp = this.maxHp; this.speed = config.SPEED; this.damage = config.DAMAGE; this.xpValue = config.XP;
             this.color = config.COLOR; this.mass = config.RADIUS / 5; this.gravity = config.GRAVITY || 0;
+            this.faction = config.FACTION || FACTIONS.NEUTRAL;
+            this.behavior = config.BEHAVIOR || 'chase';
+            this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
         }
-        update(dt) { const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist > 0) { const moveX = (dx / dist) * this.speed; const moveY = (dy / dist) * this.speed; this.x += moveX * dt; this.y += moveY * dt; } }
+        update(dt) {
+            const target = this.findTarget();
+            if (target) {
+                const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            } else if (this.behavior === 'wander') {
+                this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+                if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
+                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
+                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
+            } else {
+                const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            }
+        }
+        findTarget() {
+            let best = null; let bestDistSq = Infinity;
+            for (const e of state.enemies) {
+                if (e === this || e.faction === this.faction) continue;
+                const dx = e.x - this.x; const dy = e.y - this.y; const distSq = dx * dx + dy * dy;
+                if (distSq < bestDistSq && distSq < 90000) { best = e; bestDistSq = distSq; }
+            }
+            return best;
+        }
         draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
         takeDamage(damageInfo) {
             this.hp -= damageInfo.amount;
@@ -92,8 +121,16 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > this.config.PREF_DIST) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+            const enemyTarget = this.findTarget();
+            const player = state.player; const target = enemyTarget || player;
+            const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+            if (dist > prefer) {
+                const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
+                this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
+            } else if (dist < prefer * 0.8) {
+                const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
+                this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+            }
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
             if (this.fireCooldown <= 0) {
                 const angle = Math.atan2(dy, dx);
@@ -359,6 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     class ForceFieldWeapon extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.FORCE_FIELD }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new ForcePulseProjectile(this.owner.x, this.owner.y, this.config, this.owner)); } }
 
+    class SamaPulseGun extends Weapon {
+        constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SAMA_PULSE }; this.fireRate = this.config.FIRE_RATE; }
+        fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Projectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+    }
+
     const weaponConstructors = new Map([
         ['add_cannon', BasicCannon],
         ['add_shard_launcher', ShardLauncher],
@@ -372,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ['add_black_hole', BlackHoleWeapon],
         ['add_drone_factory', DroneFactoryWeapon],
         ['add_force_field', ForceFieldWeapon],
+        ['add_sama_pulse', SamaPulseGun],
     ]);
 
     function generateProceduralUpgrade() {
@@ -382,21 +425,50 @@ document.addEventListener('DOMContentLoaded', () => {
         const template = genericUpgradeTemplates[Math.floor(Math.random() * genericUpgradeTemplates.length)];
         const value = template.base * selectedRarity.multi;
         return {
-            isProcedural: true, name: `${template.name}: +${(value * 100).toFixed(0)}%`,
-            desc: `Increases your ${template.name.toLowerCase()} by ${(value * 100).toFixed(0)}%.`,
-            tag: template.tag, rarity: selectedRarity.color,
-            apply: (p) => { if (template.isHp) { p.maxHp *= (1 + value); p.hp += p.maxHp * value; } else { p[template.stat] += value; } }
+            isProcedural: true,
+            name: `${template.name} +${(value * 100).toFixed(0)}%`,
+            desc: `${template.desc} increased by ${(value * 100).toFixed(0)}%.`,
+            tag: template.tag,
+            rarity: selectedRarity.color,
+            apply: (p) => {
+                if (template.isHp) {
+                    p.maxHp *= (1 + value);
+                    p.hp += p.maxHp * value;
+                } else {
+                    p[template.stat] += value;
+                }
+            }
         };
     }
     function getUpgradeChoices() {
         const choices = [];
-        const availableWeapons = weaponUpgradePool.filter(upgradeData => {
-            const WeaponClass = weaponConstructors.get(upgradeData.id);
-            return !state.player.weapons.some(w => w instanceof WeaponClass);
-        });
-
-        if (availableWeapons.length > 0 && Math.random() < 0.4) { choices.push(availableWeapons[Math.floor(Math.random() * availableWeapons.length)]); }
-        while (choices.length < 3) { choices.push(generateProceduralUpgrade()); }
+        const player = state.player;
+        const maxWeapons = 5;
+        const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
+        if (player.weapons.length < maxWeapons && state.levelUpRegion && state.levelUpRegion.faction === FACTIONS.SAMA) {
+            const sama = weaponUpgradePool.find(w => w.id === 'add_sama_pulse');
+            if (sama) weaponChoices.push(sama);
+        }
+        let weaponCount = 0;
+        if (weaponChoices.length) {
+            const first = weaponChoices.splice(Math.floor(Math.random() * weaponChoices.length), 1)[0];
+            choices.push(first);
+            weaponCount = 1;
+        }
+        while (choices.length < 4) {
+            let pick = null;
+            if (weaponCount < 2 && Math.random() < 0.5 && weaponChoices.length > 0) {
+                const remaining = weaponChoices.filter(w => !choices.includes(w));
+                if (remaining.length) {
+                    pick = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+                    weaponCount++;
+                }
+            }
+            if (!pick) {
+                do { pick = generateProceduralUpgrade(); } while (choices.some(c => c.name === pick.name));
+            }
+            choices.push(pick);
+        }
         return choices.sort(() => Math.random() - 0.5);
     }
     function displayUpgradeChoices() {
@@ -404,7 +476,14 @@ document.addEventListener('DOMContentLoaded', () => {
         getUpgradeChoices().forEach(upgrade => {
             const card = document.createElement('div');
             card.className = `upgrade-card ${upgrade.rarity || 'uncommon'}`;
-            card.innerHTML = `<h3>${upgrade.name}</h3><p>${upgrade.desc}</p><span class="tag">${upgrade.tag}</span>`;
+            const title = document.createElement('h3');
+            title.textContent = upgrade.name;
+            const desc = document.createElement('p');
+            desc.textContent = upgrade.desc;
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = upgrade.tag;
+            card.append(title, desc, tag);
             card.onclick = () => selectUpgrade(upgrade);
             dom.upgradeContainer.appendChild(card);
         });
@@ -415,13 +494,8 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade.apply(player);
         } else {
             const WeaponClass = weaponConstructors.get(upgrade.id);
-            if (WeaponClass) {
-                const existingWeapon = player.weapons.find(w => w instanceof WeaponClass);
-                if (existingWeapon && existingWeapon.addOrb) {
-                    existingWeapon.addOrb();
-                } else {
-                    player.weapons.push(new WeaponClass(player));
-                }
+            if (WeaponClass && player.weapons.length < 5) {
+                player.weapons.push(new WeaponClass(player));
             }
         }
         setGameState('PLAYING');
@@ -447,7 +521,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!musicStarted) { bgMusic.play().catch(e => console.log("Audio couldn't play:", e)); musicStarted = true; }
         const keys = state ? state.keys : {}; const mouse = state ? state.mouse : { x: 0, y: 0 };
         state = getInitialState(); state.keys = keys; state.mouse = mouse;
-        state.player = new Player(canvas.width / 2, canvas.height / 2);
+        state.player = new Player(state.map.WIDTH / 2, state.map.HEIGHT / 2);
+        state.camera.x = state.player.x - canvas.width / 2;
+        state.camera.y = state.player.y - canvas.height / 2;
+        spawnFactionForces();
         nextWave();
         setGameState('PLAYING');
     }
@@ -455,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resumeGame() { if (!state.animationFrameId) { state.lastTime = performance.now(); state.animationFrameId = requestAnimationFrame(gameLoop); } }
     function nextWave() {
         state.wave++;
-        const numEnemies = 10 + state.wave * 5;
+        const numEnemies = 8 + state.wave * 4;
         const waveEnemyTypes = [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER];
         if (state.wave > 1) waveEnemyTypes.push(CONFIG.ENEMY.TANK);
         if (state.wave > 2) waveEnemyTypes.push(CONFIG.ENEMY.SHOOTER);
@@ -479,6 +556,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function spawnFactionForces() {
+        const perFaction = 15;
+        CONFIG.MAP.REGIONS.forEach(region => {
+            let configs = [];
+            if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
+            else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
+            if (!configs.length) return;
+            for (let i = 0; i < perFaction; i++) {
+                const x = region.x + Math.random() * region.width;
+                const y = region.y + Math.random() * region.height;
+                const cfg = configs[Math.floor(Math.random() * configs.length)];
+                state.enemies.push(Enemy.create(cfg, x, y));
+            }
+        });
+    }
+
+    function getRegionFor(x, y) {
+        return CONFIG.MAP.REGIONS.find(r => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) || null;
+    }
+
     let spatialGrid;
 
     function handleCollisions() {
@@ -500,6 +597,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (e2 instanceof Player && e1 instanceof XpOrb) { e2.addXp(e1.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e1); }
                 else if (e1 instanceof Projectile && e2 instanceof Enemy) handleProjectileEnemy(e1, e2);
                 else if (e2 instanceof Projectile && e1 instanceof Enemy) handleProjectileEnemy(e2, e1);
+                else if (e1 instanceof Enemy && e2 instanceof Enemy && e1.faction !== e2.faction) {
+                    e1.takeDamage({amount: e2.damage, isCrit: false});
+                    e2.takeDamage({amount: e1.damage, isCrit: false});
+                }
                 else if (e1 instanceof Player && e2 instanceof EnemyProjectile) e1.takeDamage(e2.getDamage().amount);
                 else if (e2 instanceof Player && e1 instanceof EnemyProjectile) e2.takeDamage(e1.getDamage().amount);
                 else if (e1 instanceof Drone && e2 instanceof Enemy) { e2.takeDamage({amount: e1.config.DRONE_DMG, isCrit: false}); e1.takeDamage(); }
@@ -544,6 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (spatialGrid.has(key)) {
                         for (const source of spatialGrid.get(key)) {
                             if (entity === source || entity.owner === source || !source.gravity) continue;
+                            if (entity instanceof Projectile && source instanceof Projectile) continue;
                             const dx = source.x - entity.x;
                             const dy = source.y - entity.y;
                             const distSq = dx * dx + dy * dy;
@@ -589,6 +691,20 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.globalAlpha = 1;
         state.xpOrbs.forEach(o => o.draw());
         state.enemies.forEach(e => e.draw());
+        // enemy hover labels
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        state.enemies.forEach(e => {
+            const screenX = e.x - state.camera.x;
+            const screenY = e.y - state.camera.y;
+            const dx = state.mouse.x - screenX;
+            const dy = state.mouse.y - screenY;
+            if (dx*dx + dy*dy < (e.radius + 8) * (e.radius + 8)) {
+                const type = Object.keys(CONFIG.ENEMY).find(k => CONFIG.ENEMY[k] === e.config) || 'Enemy';
+                ctx.fillText(type.replace(/_/g,' '), e.x, e.y - e.radius - 10);
+            }
+        });
         state.drones.forEach(d => d.draw());
         state.player.draw();
         ctx.globalCompositeOperation = 'lighter';
@@ -603,6 +719,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.hpBar.style.width = state.player.maxHp > 0 ? `${Math.max(0, Math.min(1, state.player.hp / state.player.maxHp)) * 100}%` : '0%';
         dom.levelValue.textContent = state.player.level;
         dom.xpBar.style.width = state.player.xpToNextLevel > 0 ? `${Math.max(0, Math.min(1, state.player.xp / state.player.xpToNextLevel)) * 100}%` : '0%';
+
+        drawMiniMap();
+        if (state.showMap) drawFullMap();
     }
 
     function gameLoop(timestamp) {
@@ -651,6 +770,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.particles.length < 500) state.particles.push(p);
     }
 
+    function drawMiniMap() {
+        const mCtx = dom.minimap.getContext('2d');
+        const scaleX = dom.minimap.width / state.map.WIDTH;
+        const scaleY = dom.minimap.height / state.map.HEIGHT;
+        mCtx.clearRect(0,0,dom.minimap.width, dom.minimap.height);
+        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        mCtx.fillStyle = '#00f5d4';
+        mCtx.beginPath();
+        mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 3, 0, Math.PI*2);
+        mCtx.fill();
+    }
+
+    function drawFullMap() {
+        const canvasMap = dom.mapCanvas;
+        const mCtx = canvasMap.getContext('2d');
+        canvasMap.width = Math.min(state.map.WIDTH/10, window.innerWidth*0.8);
+        canvasMap.height = Math.min(state.map.HEIGHT/10, window.innerHeight*0.8);
+        const scaleX = canvasMap.width / state.map.WIDTH;
+        const scaleY = canvasMap.height / state.map.HEIGHT;
+        mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
+        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        mCtx.fillStyle = '#00f5d4';
+        mCtx.beginPath();
+        mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 5, 0, Math.PI*2);
+        mCtx.fill();
+    }
+
     function reCenterCamera() {
         if (state && state.player) {
             state.camera.x = state.player.x - canvas.width / 2;
@@ -659,11 +805,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+       canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        dom.minimap.width = 200; dom.minimap.height = 200;
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; reCenterCamera(); });
-        window.addEventListener('keydown', e => { if(state) state.keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keydown', e => {
+            if(state) {
+                state.keys[e.key.toLowerCase()] = true;
+                if (e.key.toLowerCase() === 'm') {
+                    state.showMap = !state.showMap;
+                    dom.mapOverlay.classList.toggle('visible', state.showMap);
+                }
+            }
+        });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
+        document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
         state = getInitialState();

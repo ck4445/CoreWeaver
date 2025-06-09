@@ -1,4 +1,3 @@
-
 'use strict';
 
 const FACTIONS = {
@@ -18,7 +17,7 @@ const CONFIG = {
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
     ENEMY: {
-        // All enemies now have a small amount of gravity
+        // All enemies now have a small amount of gravity and faction assignments
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
         SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
         TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },

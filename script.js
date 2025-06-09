@@ -120,9 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            const enemyTarget = this.findTarget();
-            const player = state.player; const target = enemyTarget || player;
-            const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+            const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
             if (dist > prefer) {
                 const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
                 this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;

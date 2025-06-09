@@ -34,9 +34,9 @@ const CONFIG = {
         WIDTH: 9000,
         HEIGHT: 9000,
         REGIONS: [
-            { name: 'Pirate Space', faction: FACTIONS.PIRATE, x: 0, y: 0, width: 3000, height: 9000 },
-            { name: 'Dead Space', faction: null, x: 3000, y: 0, width: 3000, height: 9000 },
-            { name: 'Sama Space', faction: FACTIONS.SAMA, x: 6000, y: 0, width: 3000, height: 9000 },
+            { name: 'Pirate Space', faction: FACTIONS.PIRATE, color: '#331f20', x: 0, y: 0, width: 3000, height: 9000 },
+            { name: 'Dead Space', faction: null, color: '#222831', x: 3000, y: 0, width: 3000, height: 9000 },
+            { name: 'Sama Space', faction: FACTIONS.SAMA, color: '#203030', x: 6000, y: 0, width: 3000, height: 9000 },
         ],
     },
     WEAPONS: {

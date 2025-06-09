@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         draw() {
             ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
-            ctx.fillStyle = this.invincible && Math.floor(this.invincibleTimer / 100) % 2 === 0 ? '#fff' : '#00f5d4';
+            ctx.fillStyle = this.invincible && Math.floor(this.invincibleTimer / 100) % 2 === 0 ? '#fff' : '#FFD700';
             ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-10, -10); ctx.lineTo(-5, 0); ctx.lineTo(-10, 10); ctx.closePath();
             ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
         }
@@ -87,19 +87,22 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
-            let target = this.findTarget();
-            if (this.isWave && !target) target = state.player;
-            if (target) {
+            let target = this.findTarget(); // findTarget prioritizes other factions
+
+            if (this.isWave && !target) { // Wave enemies can target player if no other faction target
+                target = state.player;
+            }
+
+            if (target) { // Covers both wave and non-wave if a valid target is found
                 const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
-            } else if (this.behavior === 'wander' || !this.isWave) {
+            } else { // No target found
+                // Non-wave enemies ALWAYS wander if no other faction target. Wave enemies might also wander if player somehow disappears.
+                // For non-wave enemies, this.behavior might be 'chase', but they should wander if target is null.
                 this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
                 if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
                 this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
                 this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
-            } else {
-                const player = state.player; const dx = player.x - this.x; const dy = player.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
             }
         }
         findTarget() {
@@ -149,11 +152,22 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            let target = this.findTarget();
-            if (this.isWave && !target) target = state.player;
-            const moveTarget = this.isWave ? (target || state.player) : target;
-            if (moveTarget) {
-                const dx = moveTarget.x - this.x; const dy = moveTarget.y - this.y;
+            let target = this.findTarget(); // Prioritizes other factions
+            let firingTarget = null; // Separate target for firing decision
+            let movementTarget = null; // Separate target for movement decision
+
+            if (this.isWave) {
+                // Wave enemies can target player for movement and firing if no other faction target
+                movementTarget = target || state.player;
+                firingTarget = target || state.player;
+            } else {
+                // Non-wave enemies only target other factions for movement and firing
+                movementTarget = target;
+                firingTarget = target;
+            }
+
+            if (movementTarget) {
+                const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
                 const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
                 if (dist > prefer) {
                     const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
@@ -162,15 +176,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
                     this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
                 }
-            } else if (!this.isWave) {
+            } else { // No movement target (either non-wave with no faction target, or wave with no target at all)
                 this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
                 if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
                 this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
                 this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
             }
+
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
-            if (this.fireCooldown <= 0 && moveTarget) {
-                const angle = Math.atan2(moveTarget.y - this.y, moveTarget.x - this.x);
+            if (this.fireCooldown <= 0 && firingTarget) { // Firing only if there's a valid firingTarget
+                const angle = Math.atan2(firingTarget.y - this.y, firingTarget.x - this.x);
                 state.projectiles.push(new EnemyProjectile(this.x, this.y, angle, { ...this.config, SPEED: 3, RADIUS: 4, DAMAGE: this.damage }, this));
                 this.fireCooldown = this.config.FIRE_RATE;
             }
@@ -592,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const config = waveEnemyTypes[Math.floor(Math.random() * waveEnemyTypes.length)];
             const enemy = Enemy.create(config, x, y);
             enemy.isWave = true;
-            enemy.color = '#ff0000';
+            enemy.color = '#FF69B4';
             state.enemies.push(enemy);
         }
     }

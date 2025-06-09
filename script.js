@@ -119,11 +119,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fill();
-            const outline = FACTION_OUTLINE_COLORS[this.faction];
-            if (outline) {
-                ctx.strokeStyle = outline;
+            if (this.isWave) {
+                ctx.strokeStyle = '#FFFF00'; // Bright yellow outline for all wave enemies
                 ctx.lineWidth = Math.max(2, this.radius * 0.3);
                 ctx.stroke();
+            } else {
+                const outline = FACTION_OUTLINE_COLORS[this.faction];
+                if (outline) {
+                    ctx.strokeStyle = outline;
+                    ctx.lineWidth = Math.max(2, this.radius * 0.3);
+                    ctx.stroke();
+                }
             }
         }
         takeDamage(damageInfo) {
@@ -607,7 +613,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const config = waveEnemyTypes[Math.floor(Math.random() * waveEnemyTypes.length)];
             const enemy = Enemy.create(config, x, y);
             enemy.isWave = true;
-            enemy.color = '#FF69B4';
             state.enemies.push(enemy);
         }
     }

@@ -6,6 +6,13 @@ const FACTIONS = {
     NEUTRAL: 'Neutral',
 };
 
+// Visible outline colors for each faction
+const FACTION_OUTLINE_COLORS = {
+    [FACTIONS.PIRATE]: '#ff4d4d',   // bright red for pirates
+    [FACTIONS.SAMA]: '#4dffd4',    // cyan/green for Sama forces
+    [FACTIONS.NEUTRAL]: '#cccccc', // neutral grey for others
+};
+
 function rectsOverlap(a, b) {
     return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
              a.y + a.height <= b.y || b.y + b.height <= a.y);
@@ -67,7 +74,7 @@ const CONFIG = {
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#f94144', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
         SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#f3722c', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
         TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#90be6d', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },
-        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#277da1', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE },
+        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#000000', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE },
         SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#f9c74f', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5, FACTION: FACTIONS.PIRATE },
         GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE }, // Graviton remains a super-source
         CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },

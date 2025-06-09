@@ -6,6 +6,33 @@ const FACTIONS = {
     NEUTRAL: 'Neutral',
 };
 
+function generateMapRegions(width, height) {
+    const regions = [];
+    const count = 20;
+    for (let i = 0; i < count; i++) {
+        const w = 800 + Math.random() * 1200;
+        const h = 800 + Math.random() * 1200;
+        const x = Math.random() * (width - w);
+        const y = Math.random() * (height - h);
+        let faction, name, color;
+        if (Math.random() < 0.7) {
+            faction = null;
+            name = 'Dead Space';
+            color = '#222831';
+        } else if (Math.random() < 0.5) {
+            faction = FACTIONS.PIRATE;
+            name = 'Pirate Outpost';
+            color = '#331f20';
+        } else {
+            faction = FACTIONS.SAMA;
+            name = 'Sama Enclave';
+            color = '#203030';
+        }
+        regions.push({ name, faction, color, x, y, width: w, height: h });
+    }
+    return regions;
+}
+
 const CONFIG = {
     PLAYER: {
         RADIUS: 12, MAX_HP: 100, SPEED: 1.7, ROTATION_SPEED: 0.08, FRICTION: 0.9, INVINCIBILITY_DURATION: 1000, MAGNET_RADIUS: 120,
@@ -33,11 +60,7 @@ const CONFIG = {
     MAP: {
         WIDTH: 9000,
         HEIGHT: 9000,
-        REGIONS: [
-            { name: 'Pirate Space', faction: FACTIONS.PIRATE, color: '#331f20', x: 0, y: 0, width: 3000, height: 9000 },
-            { name: 'Dead Space', faction: null, color: '#222831', x: 3000, y: 0, width: 3000, height: 9000 },
-            { name: 'Sama Space', faction: FACTIONS.SAMA, color: '#203030', x: 6000, y: 0, width: 3000, height: 9000 },
-        ],
+        REGIONS: generateMapRegions(9000, 9000),
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity

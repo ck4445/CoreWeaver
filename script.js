@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.faction = config.FACTION || FACTIONS.NEUTRAL;
             this.behavior = config.BEHAVIOR || 'chase';
             this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
+            this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
             const target = this.findTarget();
@@ -540,19 +541,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.wave > 4) waveEnemyTypes.push(CONFIG.ENEMY.CLOAKER);
         if (state.wave > 5) waveEnemyTypes.push(CONFIG.ENEMY.GRAVITON);
         if (state.wave > 6) waveEnemyTypes.push(CONFIG.ENEMY.HEALER);
-
+        const spawnRadius = 600;
         for (let i = 0; i < numEnemies; i++) {
-            const side = Math.floor(Math.random() * 4);
-            let x, y;
-            const spawnDist = 100;
-            switch(side) {
-                case 0: x = Math.random() * canvas.width; y = -spawnDist; break;
-                case 1: x = canvas.width + spawnDist; y = Math.random() * canvas.height; break;
-                case 2: x = Math.random() * canvas.width; y = canvas.height + spawnDist; break;
-                case 3: x = -spawnDist; y = Math.random() * canvas.height; break;
-            }
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 300 + Math.random() * spawnRadius;
+            const x = state.player.x + Math.cos(angle) * dist;
+            const y = state.player.y + Math.sin(angle) * dist;
             const config = waveEnemyTypes[Math.floor(Math.random() * waveEnemyTypes.length)];
-            state.enemies.push(Enemy.create(config, x + state.camera.x, y + state.camera.y));
+            const enemy = Enemy.create(config, x, y);
+            enemy.isWave = true;
+            enemy.color = '#ff0000';
+            state.enemies.push(enemy);
         }
     }
 
@@ -567,7 +566,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const x = region.x + Math.random() * region.width;
                 const y = region.y + Math.random() * region.height;
                 const cfg = configs[Math.floor(Math.random() * configs.length)];
-                state.enemies.push(Enemy.create(cfg, x, y));
+                const enemy = Enemy.create(cfg, x, y);
+                if (cfg.FACTION === FACTIONS.SAMA) enemy.color = '#ffffff';
+                else enemy.color = '#ffa500';
+                enemy.isWave = false;
+                state.enemies.push(enemy);
             }
         });
     }
@@ -678,7 +681,8 @@ document.addEventListener('DOMContentLoaded', () => {
         handleGravity(dt);
         state.particles = state.particles.filter(p => p.lifespan > 0);
         state.particles.forEach(p => p.update(dt));
-        if (state.enemies.length === 0 && state.gameState === 'PLAYING') nextWave();
+        const remainingWave = state.enemies.filter(e => e.isWave).length;
+        if (remainingWave === 0 && state.gameState === 'PLAYING') nextWave();
         state.camera.x = state.player.x - canvas.width / 2;
         state.camera.y = state.player.y - canvas.height / 2;
     }
@@ -783,8 +787,8 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.textAlign = 'center';
             mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
         });
-        mCtx.fillStyle = '#ff0000';
         state.enemies.forEach(e => {
+            mCtx.fillStyle = e.color;
             mCtx.fillRect(e.x*scaleX-1, e.y*scaleY-1, 2, 2);
         });
         mCtx.fillStyle = '#00f5d4';
@@ -809,8 +813,8 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.textAlign = 'center';
             mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
         });
-        mCtx.fillStyle = '#ff0000';
         state.enemies.forEach(e => {
+            mCtx.fillStyle = e.color;
             mCtx.fillRect(e.x*scaleX-2, e.y*scaleY-2, 4, 4);
         });
         mCtx.fillStyle = '#00f5d4';

@@ -58,6 +58,7 @@ function generateMapRegions(width, height) {
     return regions;
 }
 
+
 const CONFIG = {
     PLAYER: {
         RADIUS: 12, MAX_HP: 100, SPEED: 1.7, ROTATION_SPEED: 0.08, FRICTION: 0.9, INVINCIBILITY_DURATION: 1000, MAGNET_RADIUS: 120,

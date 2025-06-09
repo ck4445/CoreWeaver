@@ -775,7 +775,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleX = dom.minimap.width / state.map.WIDTH;
         const scaleY = dom.minimap.height / state.map.HEIGHT;
         mCtx.clearRect(0,0,dom.minimap.width, dom.minimap.height);
-        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        CONFIG.MAP.REGIONS.forEach(r => {
+            mCtx.fillStyle = r.color || '#444';
+            mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+            mCtx.fillStyle = '#fff';
+            mCtx.font = '10px sans-serif';
+            mCtx.textAlign = 'center';
+            mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
+        });
+        mCtx.fillStyle = '#ff0000';
+        state.enemies.forEach(e => {
+            mCtx.fillRect(e.x*scaleX-1, e.y*scaleY-1, 2, 2);
+        });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
         mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 3, 0, Math.PI*2);
@@ -790,7 +801,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleX = canvasMap.width / state.map.WIDTH;
         const scaleY = canvasMap.height / state.map.HEIGHT;
         mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
-        CONFIG.MAP.REGIONS.forEach(r => { mCtx.fillStyle = r.color; mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY); });
+        CONFIG.MAP.REGIONS.forEach(r => {
+            mCtx.fillStyle = r.color || '#444';
+            mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+            mCtx.fillStyle = '#fff';
+            mCtx.font = '16px sans-serif';
+            mCtx.textAlign = 'center';
+            mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
+        });
+        mCtx.fillStyle = '#ff0000';
+        state.enemies.forEach(e => {
+            mCtx.fillRect(e.x*scaleX-2, e.y*scaleY-2, 4, 4);
+        });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
         mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 5, 0, Math.PI*2);

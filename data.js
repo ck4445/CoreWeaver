@@ -6,6 +6,33 @@ const FACTIONS = {
     NEUTRAL: 'Neutral',
 };
 
+function generateMapRegions(width, height) {
+    const regions = [];
+    const count = 20;
+    for (let i = 0; i < count; i++) {
+        const w = 800 + Math.random() * 1200;
+        const h = 800 + Math.random() * 1200;
+        const x = Math.random() * (width - w);
+        const y = Math.random() * (height - h);
+        let faction, name, color;
+        if (Math.random() < 0.7) {
+            faction = null;
+            name = 'Dead Space';
+            color = '#222831';
+        } else if (Math.random() < 0.5) {
+            faction = FACTIONS.PIRATE;
+            name = 'Pirate Outpost';
+            color = '#331f20';
+        } else {
+            faction = FACTIONS.SAMA;
+            name = 'Sama Enclave';
+            color = '#203030';
+        }
+        regions.push({ name, faction, color, x, y, width: w, height: h });
+    }
+    return regions;
+}
+
 const CONFIG = {
     PLAYER: {
         RADIUS: 12, MAX_HP: 100, SPEED: 1.7, ROTATION_SPEED: 0.08, FRICTION: 0.9, INVINCIBILITY_DURATION: 1000, MAGNET_RADIUS: 120,
@@ -26,16 +53,14 @@ const CONFIG = {
         GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#4d908e', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE }, // Graviton remains a super-source
         CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#577590', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },
         HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#f8961e', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE },
-        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#b5838d', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
+        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#ffffff', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
+        SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 12, XP: 12, COLOR: '#ffffff', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA },
+        SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#ffffff', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
     },
     MAP: {
         WIDTH: 9000,
         HEIGHT: 9000,
-        REGIONS: [
-            { name: 'Pirate Space', faction: FACTIONS.PIRATE, x: 0, y: 0, width: 3000, height: 9000 },
-            { name: 'Dead Space', faction: null, x: 3000, y: 0, width: 3000, height: 9000 },
-            { name: 'Sama Space', faction: FACTIONS.SAMA, x: 6000, y: 0, width: 3000, height: 9000 },
-        ],
+        REGIONS: generateMapRegions(9000, 9000),
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity

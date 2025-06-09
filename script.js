@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resumeGame() { if (!state.animationFrameId) { state.lastTime = performance.now(); state.animationFrameId = requestAnimationFrame(gameLoop); } }
     function nextWave() {
         state.wave++;
-        const numEnemies = 10 + state.wave * 5;
+        const numEnemies = 8 + state.wave * 4;
         const waveEnemyTypes = [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER];
         if (state.wave > 1) waveEnemyTypes.push(CONFIG.ENEMY.TANK);
         if (state.wave > 2) waveEnemyTypes.push(CONFIG.ENEMY.SHOOTER);
@@ -573,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (spatialGrid.has(key)) {
                         for (const source of spatialGrid.get(key)) {
                             if (entity === source || entity.owner === source || !source.gravity) continue;
+                            if (entity instanceof Projectile && source instanceof Projectile) continue;
                             const dx = source.x - entity.x;
                             const dy = source.y - entity.y;
                             const distSq = dx * dx + dy * dy;

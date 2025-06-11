@@ -69,7 +69,7 @@ const CONFIG = {
         GRAVITY_CONSTANT: 20, // Reduced further to minimize projectile attraction
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
-    HYPERSPACE: { CHARGE_TIME: 30000 },
+    HYPERSPACE: { CHARGE_TIME: 30000, SPEED_MULTIPLIER: 10 },
     ENEMY: {
         // All enemies now have a small amount of gravity and faction assignments
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#A0522D', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },

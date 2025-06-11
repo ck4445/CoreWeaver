@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         upgradeContainer: document.getElementById('upgrade-cards-container'), startButton: document.getElementById('start-button'),
         restartButton: document.getElementById('restart-button'), finalScore: document.getElementById('final-score'), finalWave: document.getElementById('final-wave'),
         minimap: document.getElementById('minimap'), mapOverlay: document.getElementById('map-overlay'), mapCanvas: document.getElementById('map-canvas'),
+        hyperspaceOverlay: document.getElementById('hyperspace-overlay'),
     };
 
     let state, musicStarted = false;
@@ -45,8 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
         update(dt) {
             // Use all keys as lowercase for consistency
             if (state.hyperspaceActive) {
-                this.vx = Math.cos(this.angle) * this.speed * 4;
-                this.vy = Math.sin(this.angle) * this.speed * 4;
+                const mult = CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
+                this.vx = Math.cos(this.angle) * this.speed * mult;
+                this.vy = Math.sin(this.angle) * this.speed * mult;
             } else {
                 if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * this.speed; this.vy += Math.sin(this.angle) * this.speed; createThrusterParticles(this); }
                 this.vx *= this.friction; this.vy *= this.friction;
@@ -839,6 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.hyperValue.textContent = `${Math.floor(ratio * 100)}%`;
             dom.hyperBar.style.width = `${ratio * 100}%`;
         }
+        dom.hyperspaceOverlay.classList.toggle('active', state.hyperspaceActive);
 
         drawMiniMap();
         if (state.showMap) drawFullMap();

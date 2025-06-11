@@ -20,12 +20,40 @@ document.addEventListener('DOMContentLoaded', () => {
     let state, musicStarted = false;
     const MINIMAP_VIEW = 30000;
     let mapZoom = 0.25;
+
+    function generateBackground(width, height) {
+        const stars = [];
+        const planets = [];
+        const starColors = ['#ffffff', '#ffe5b4', '#b0e0e6', '#dcdcdc'];
+        const planetColors = ['#6c5ce7', '#e17055', '#00b894', '#0984e3', '#fdcb6e'];
+        const starCount = 20000;
+        const planetCount = 50;
+        for (let i = 0; i < starCount; i++) {
+            stars.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                r: Math.random() * 1.5 + 0.5,
+                color: starColors[Math.floor(Math.random() * starColors.length)],
+                a: Math.random() * 0.5 + 0.5,
+            });
+        }
+        for (let i = 0; i < planetCount; i++) {
+            planets.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                r: 40 + Math.random() * 80,
+                color: planetColors[Math.floor(Math.random() * planetColors.length)],
+            });
+        }
+        return { stars, planets };
+    }
     function getInitialState() {
+        const bg = generateBackground(CONFIG.MAP.WIDTH, CONFIG.MAP.HEIGHT);
         return {
             gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
-            hyperspaceCharge: 0, hyperspaceActive: false
+            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets
         };
     }
 
@@ -46,8 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
         update(dt) {
             // Use all keys as lowercase for consistency
             if (state.hyperspaceActive) {
-                this.vx = Math.cos(this.angle) * this.speed * 4;
-                this.vy = Math.sin(this.angle) * this.speed * 4;
+                this.vx = Math.cos(this.angle) * this.speed * CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
+                this.vy = Math.sin(this.angle) * this.speed * CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
             } else {
                 if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * this.speed; this.vy += Math.sin(this.angle) * this.speed; createThrusterParticles(this); }
                 this.vx *= this.friction; this.vy *= this.friction;
@@ -799,6 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.save();
         ctx.fillStyle = '#00000a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.translate(-state.camera.x, -state.camera.y);
+        drawBackground();
         state.particles.forEach(p => p.draw());
         ctx.globalAlpha = 1;
         state.xpOrbs.forEach(o => o.draw());
@@ -890,6 +919,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = new Particle(x, y, 0, -0.5, 300, '#5dd39e', 2);
         p.draw = function() { ctx.globalAlpha = this.lifespan / this.initialLifespan; ctx.strokeStyle = this.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(this.x, this.y-this.size); ctx.lineTo(this.x, this.y+this.size); ctx.moveTo(this.x-this.size, this.y); ctx.lineTo(this.x+this.size, this.y); ctx.stroke(); };
         if (state.particles.length < 500) state.particles.push(p);
+    }
+
+    function drawBackground() {
+        for (const s of state.stars) {
+            if (s.x < state.camera.x - 2 || s.x > state.camera.x + canvas.width + 2 ||
+                s.y < state.camera.y - 2 || s.y > state.camera.y + canvas.height + 2) continue;
+            ctx.globalAlpha = s.a;
+            ctx.fillStyle = s.color;
+            ctx.fillRect(s.x, s.y, s.r, s.r);
+        }
+        ctx.globalAlpha = 1;
+        for (const p of state.planets) {
+            if (p.x + p.r < state.camera.x || p.x - p.r > state.camera.x + canvas.width ||
+                p.y + p.r < state.camera.y || p.y - p.r > state.camera.y + canvas.height) continue;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     function drawMiniMap() {

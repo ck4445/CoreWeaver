@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         upgradeContainer: document.getElementById('upgrade-cards-container'), startButton: document.getElementById('start-button'),
         restartButton: document.getElementById('restart-button'), finalScore: document.getElementById('final-score'), finalWave: document.getElementById('final-wave'),
         minimap: document.getElementById('minimap'), mapOverlay: document.getElementById('map-overlay'), mapCanvas: document.getElementById('map-canvas'),
+        hyperspaceOverlay: document.getElementById('hyperspace-overlay'),
     };
 
     let state, musicStarted = false;
@@ -839,6 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.hyperValue.textContent = `${Math.floor(ratio * 100)}%`;
             dom.hyperBar.style.width = `${ratio * 100}%`;
         }
+        dom.hyperspaceOverlay.classList.toggle('active', state.hyperspaceActive);
 
         drawMiniMap();
         if (state.showMap) drawFullMap();

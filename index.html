@@ -40,57 +40,39 @@
     <div id="control-panel" class="hidden" aria-hidden="true">
         <div class="menu-card control-panel-card">
             <div id="app-grid">
-                <div class="app-icon" data-app="diplomacy" aria-label="Diplomacy" role="button">
-                    <span class="emoji">🛡️</span>
-                    <span class="label">Diplomacy</span>
-                </div>
-                <div class="app-icon" data-app="news" aria-label="News" role="button">
-                    <span class="emoji">📰</span>
-                    <span class="label">News</span>
-                </div>
-                <div class="app-icon" data-app="quests" aria-label="Quests" role="button">
-                    <span class="emoji">📜</span>
-                    <span class="label">Quests</span>
-                </div>
-                <div class="app-icon" data-app="skills" aria-label="Skills" role="button">
-                    <span class="emoji">🌿</span>
-                    <span class="label">Skills</span>
-                </div>
-                <div class="app-icon" data-app="stats" aria-label="Stats" role="button">
-                    <span class="emoji">📊</span>
-                    <span class="label">Stats</span>
-                </div>
-                <div class="app-icon" data-app="modifiers" aria-label="Modifiers" role="button">
-                    <span class="emoji">🧬</span>
-                    <span class="label">Mods</span>
-                </div>
+                <div class="app-icon" data-app="diplomacy" aria-label="Diplomacy" role="button">🛡️</div>
+                <div class="app-icon" data-app="news" aria-label="News" role="button">📰</div>
+                <div class="app-icon" data-app="quests" aria-label="Quests" role="button">📜</div>
+                <div class="app-icon" data-app="skills" aria-label="Skills" role="button">🌿</div>
+                <div class="app-icon" data-app="stats" aria-label="Stats" role="button">📊</div>
+                <div class="app-icon" data-app="modifiers" aria-label="Modifiers" role="button">🧬</div>
             </div>
             <button id="close-control-panel">Close</button>
         </div>
     </div>
     <div id="news-overlay" class="hidden" aria-hidden="true">
-        <div class="menu-card news-card">
+        <div class="menu-card app-card">
             <h2>News Feed</h2>
             <ul id="news-list"></ul>
             <button class="close-app" data-target="news-overlay">Close</button>
         </div>
     </div>
     <div id="skill-overlay" class="hidden" aria-hidden="true">
-        <div class="menu-card skill-card">
+        <div class="menu-card app-card">
             <h2>Skill Tree</h2>
-            <div id="skill-tree-view" class="skill-tree"></div>
+            <div id="skill-tree-content"></div>
             <button class="close-app" data-target="skill-overlay">Close</button>
         </div>
     </div>
     <div id="stats-overlay" class="hidden" aria-hidden="true">
-        <div class="menu-card stats-card">
+        <div class="menu-card app-card">
             <h2>Player Stats</h2>
-            <pre id="stats-view"></pre>
+            <div id="stats-content"></div>
             <button class="close-app" data-target="stats-overlay">Close</button>
         </div>
     </div>
     <div id="modifiers-overlay" class="hidden" aria-hidden="true">
-        <div class="menu-card modifiers-card">
+        <div class="menu-card app-card">
             <h2>Active Modifiers</h2>
             <ul id="modifiers-list"></ul>
             <button class="close-app" data-target="modifiers-overlay">Close</button>

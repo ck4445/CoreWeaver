@@ -140,6 +140,10 @@ function populatePOIs(regions) {
             region.pois.push({ type: POI_TYPES.OUTPOST, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
         } else if (roll < 0.2) {
             region.pois.push({ type: POI_TYPES.BLACK_MARKET, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.25) {
+            region.pois.push({ type: POI_TYPES.TECH_DROP, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.3) {
+            region.pois.push({ type: POI_TYPES.MISSION_DATA, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
         }
     });
 }

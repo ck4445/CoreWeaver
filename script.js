@@ -235,7 +235,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateSkillViewer() {
-        dom.skillTreeView.textContent = JSON.stringify(state.skillTree, null, 2);
+        dom.skillTreeView.innerHTML = '';
+        Object.entries(state.skillTree).forEach(([category, skills]) => {
+            const catDiv = document.createElement('div');
+            catDiv.className = 'skill-category';
+            const title = document.createElement('h3');
+            title.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+            const ul = document.createElement('ul');
+            Object.entries(skills).forEach(([skill, level]) => {
+                const li = document.createElement('li');
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = skill;
+                const levelSpan = document.createElement('span');
+                levelSpan.textContent = level;
+                li.append(nameSpan, levelSpan);
+                ul.appendChild(li);
+            });
+            catDiv.append(title, ul);
+            dom.skillTreeView.appendChild(catDiv);
+        });
     }
 
     function updateStatsView() {

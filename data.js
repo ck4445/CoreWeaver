@@ -56,11 +56,6 @@ const POI_TYPES = {
 
 const BIOME_TYPES = ['Nebula', 'Void Rift', 'Crystal Zone', 'Asteroid Field'];
 
-function rectsOverlap(a, b) {
-    return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
-             a.y + a.height <= b.y || b.y + b.height <= a.y);
-}
-
 function generateMapRegions(width, height) {
     const cols = 6, rows = 6;
     const cellW = Math.floor(width / cols);

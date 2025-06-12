@@ -433,11 +433,12 @@ button:hover {
 }
 
 .control-panel-card {
-    max-width: 500px;
+    max-width: 600px;
     display: flex;
     flex-direction: column;
     gap: 20px;
     align-items: center;
+    padding: 20px;
 }
 
 #app-grid {
@@ -447,17 +448,60 @@ button:hover {
 }
 
 .app-icon {
-    font-size: 32px;
-    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 28px;
+    padding: 15px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     cursor: pointer;
-    text-align: center;
     user-select: none;
+    background-color: rgba(255,255,255,0.05);
+    transition: background-color 0.2s;
 }
 
 .app-icon:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+
+.app-icon .label {
+    font-size: 14px;
+}
+
+#skill-tree-view {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+}
+
+.skill-category {
     background-color: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+    width: 160px;
+}
+
+.skill-category h3 {
+    color: var(--accent-color);
+    margin-bottom: 8px;
+    font-size: 18px;
+}
+
+.skill-category ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.skill-category li {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 14px;
 }
 
 #news-popup {

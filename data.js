@@ -13,6 +13,15 @@ const FACTION_OUTLINE_COLORS = {
     [FACTIONS.NEUTRAL]: '#cccccc', // neutral grey for others
 };
 
+// Types of points of interest that can appear in regions
+const POI_TYPES = {
+    DERELICT: 'Derelict Ship',
+    OUTPOST: 'Outpost',
+    BLACK_MARKET: 'Black Market',
+    TECH_DROP: 'Sama Tech Drop',
+    MISSION_DATA: 'Mission Data',
+};
+
 function rectsOverlap(a, b) {
     return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
              a.y + a.height <= b.y || b.y + b.height <= a.y);
@@ -53,9 +62,33 @@ function generateMapRegions(width, height) {
             color = '#222831';
             music = 'dead_space.ogg';
         }
-        regions.push({ ...cell, name, faction, color, music });
+        regions.push({
+            ...cell,
+            name,
+            faction,
+            color,
+            music,
+            discovered: false,
+            cleared: false,
+            pois: [],
+            events: [],
+        });
     });
     return regions;
+}
+
+// Scatter points of interest throughout the generated regions
+function populatePOIs(regions) {
+    regions.forEach(region => {
+        const roll = Math.random();
+        if (roll < 0.1) {
+            region.pois.push({ type: POI_TYPES.DERELICT, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.15) {
+            region.pois.push({ type: POI_TYPES.OUTPOST, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.2) {
+            region.pois.push({ type: POI_TYPES.BLACK_MARKET, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        }
+    });
 }
 
 
@@ -83,11 +116,16 @@ const CONFIG = {
         SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#D2691E', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
         SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 12, XP: 12, COLOR: '#696969', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA },
         SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#F4A460', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
+        NEUTRAL_TRADER: { RADIUS: 10, HP: 40, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#cccccc', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true },
     },
     MAP: {
         WIDTH: 367200,
         HEIGHT: 367200,
-        REGIONS: generateMapRegions(367200, 367200),
+        REGIONS: (() => {
+            const regs = generateMapRegions(367200, 367200);
+            populatePOIs(regs);
+            return regs;
+        })(),
     },
     WEAPONS: {
         // All projectiles now have a tiny amount of gravity

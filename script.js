@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
             autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
-            newsFeed: [],
+            newsFeed: [], activeInvasions: [],
             hostileFactions: new Set(),
             factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
             skillTree: loadSkillTree(),
@@ -1160,16 +1160,61 @@ document.addEventListener('DOMContentLoaded', () => {
         while (targetRegion === attackerRegion) targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
         const attacker = attackerRegion.faction;
         const defender = targetRegion.faction;
-        const winner = Math.random() < 0.5 ? attacker : defender;
-        targetRegion.faction = winner;
-        const msg = `[${winner}] captured ${targetRegion.name}`;
-        state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[winner]});
+        const invasion = {
+            attacker,
+            defender,
+            region: targetRegion,
+            attackers: [],
+            defenders: [],
+        };
+        for (let i = 0; i < 4; i++) {
+            const ax = targetRegion.x + Math.random()*targetRegion.width;
+            const ay = targetRegion.y + Math.random()*targetRegion.height;
+            const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
+            enemyA.faction = attacker;
+            enemyA.active = true;
+            enemyA.invasion = invasion;
+            enemyA.side = 'attackers';
+            enemyA.onDeath = function() { invasion.attackers = invasion.attackers.filter(e => e !== this); };
+            invasion.attackers.push(enemyA);
+            state.enemies.push(enemyA);
+            const dx = targetRegion.x + Math.random()*targetRegion.width;
+            const dy = targetRegion.y + Math.random()*targetRegion.height;
+            const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
+            enemyD.faction = defender;
+            enemyD.active = true;
+            enemyD.invasion = invasion;
+            enemyD.side = 'defenders';
+            enemyD.onDeath = function() { invasion.defenders = invasion.defenders.filter(e => e !== this); };
+            invasion.defenders.push(enemyD);
+            state.enemies.push(enemyD);
+        }
+        targetRegion.invasion = invasion;
+        state.activeInvasions.push(invasion);
+        const msg = `${attacker} forces have invaded ${targetRegion.name}!`;
+        state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[attacker]});
         dom.newsPopup.textContent = msg;
         dom.newsPopup.classList.remove('hidden');
         clearTimeout(newsPopupTimeout);
-        newsPopupTimeout = setTimeout(() => {
-            dom.newsPopup.classList.add('hidden');
-        }, 5000);
+        newsPopupTimeout = setTimeout(() => { dom.newsPopup.classList.add('hidden'); }, 5000);
+    }
+
+    function updateInvasions(dt) {
+        state.activeInvasions = state.activeInvasions.filter(inv => {
+            if (!inv.attackers.length || !inv.defenders.length) {
+                const winner = inv.defenders.length ? inv.defender : inv.attacker;
+                inv.region.faction = winner;
+                delete inv.region.invasion;
+                const msg = `[${winner}] captured ${inv.region.name}`;
+                state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[winner]});
+                dom.newsPopup.textContent = msg;
+                dom.newsPopup.classList.remove('hidden');
+                clearTimeout(newsPopupTimeout);
+                newsPopupTimeout = setTimeout(() => { dom.newsPopup.classList.add('hidden'); }, 5000);
+                return false;
+            }
+            return true;
+        });
     }
 
     function handlePoiCollision(poi) {
@@ -1345,6 +1390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.projectiles.forEach(p => p.update(dt));
         state.drones.forEach(d => d.update(dt));
         state.xpOrbs.forEach(o => o.update(dt));
+        updateInvasions(dt);
         handleCollisions();
         handleGravity(dt);
         state.particles = state.particles.filter(p => p.lifespan > 0);
@@ -1503,6 +1549,27 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
             drawRegionPath(mCtx, r.points, minX, minY, scaleX, scaleY);
             mCtx.fill();
+            if (r.invasion) {
+                mCtx.save();
+                mCtx.strokeStyle = '#ffff00';
+                mCtx.lineWidth = 2;
+                mCtx.shadowColor = '#ffff00';
+                mCtx.shadowBlur = 10 + 5*Math.sin(state.gameTime/200);
+                drawRegionPath(mCtx, r.points, minX, minY, scaleX, scaleY);
+                mCtx.stroke();
+                const ax = (r.cx - minX)*scaleX;
+                const ay = (r.cy - minY)*scaleY - 8;
+                const total = r.invasion.attackers.length + r.invasion.defenders.length;
+                const aRatio = total ? r.invasion.attackers.length / total : 0;
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.attacker];
+                mCtx.fillRect(ax-15, ay, 30*aRatio, 4);
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.defender];
+                mCtx.fillRect(ax-15+30*aRatio, ay, 30*(1-aRatio), 4);
+                mCtx.strokeStyle = '#000';
+                mCtx.lineWidth = 1;
+                mCtx.strokeRect(ax-15, ay, 30, 4);
+                mCtx.restore();
+            }
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '10px sans-serif';
@@ -1554,6 +1621,27 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
             drawRegionPath(mCtx, r.points, 0, 0, scaleX, scaleY);
             mCtx.fill();
+            if (r.invasion) {
+                mCtx.save();
+                mCtx.strokeStyle = '#ffff00';
+                mCtx.lineWidth = 2;
+                mCtx.shadowColor = '#ffff00';
+                mCtx.shadowBlur = 15 + 5*Math.sin(state.gameTime/200);
+                drawRegionPath(mCtx, r.points, 0, 0, scaleX, scaleY);
+                mCtx.stroke();
+                const ax = r.cx*scaleX;
+                const ay = r.cy*scaleY - 12;
+                const total = r.invasion.attackers.length + r.invasion.defenders.length;
+                const aRatio = total ? r.invasion.attackers.length / total : 0;
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.attacker];
+                mCtx.fillRect(ax-20, ay, 40*aRatio, 6);
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.defender];
+                mCtx.fillRect(ax-20+40*aRatio, ay, 40*(1-aRatio), 6);
+                mCtx.strokeStyle = '#000';
+                mCtx.lineWidth = 1;
+                mCtx.strokeRect(ax-20, ay, 40, 6);
+                mCtx.restore();
+            }
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '16px sans-serif';

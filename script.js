@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
         restartButton: document.getElementById('restart-button'), finalScore: document.getElementById('final-score'), finalWave: document.getElementById('final-wave'),
         minimap: document.getElementById('minimap'), mapOverlay: document.getElementById('map-overlay'), mapCanvas: document.getElementById('map-canvas'),
         hyperspaceOverlay: document.getElementById('hyperspace-overlay'),
+        diplomacyOverlay: document.getElementById('diplomacy-overlay'),
+        diplomacyTable: document.getElementById('diplomacy-table'),
+        closeDiplomacy: document.getElementById('close-diplomacy'),
+        classMenu: document.getElementById('class-select-menu'),
+        classOptions: document.getElementById('class-options'),
+        dialogueOverlay: document.getElementById('dialogue-overlay'),
+        dialogueText: document.getElementById('dialogue-text'),
+        dialogueChoices: document.getElementById('dialogue-choices'),
     };
 
     let state, musicStarted = false;
@@ -57,7 +65,75 @@ document.addEventListener('DOMContentLoaded', () => {
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
             autoFire: false, events: [], eventTimer: 10000, mission: null, speedBoost: 1,
             hostileFactions: new Set(),
+            factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
+            skillTree: loadSkillTree(),
         };
+    }
+
+    function adjustFactionRelation(f1, f2, amount) {
+        if (!state.factionRelations[f1] || !state.factionRelations[f2]) return;
+        state.factionRelations[f1][f2] = Math.max(-100, Math.min(100, state.factionRelations[f1][f2] + amount));
+        state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] - amount));
+        updateDiplomacyUI();
+    }
+
+    function loadSkillTree() {
+        try { return JSON.parse(localStorage.getItem('skillTree')) || JSON.parse(JSON.stringify(BASE_SKILL_TREE)); } catch { return JSON.parse(JSON.stringify(BASE_SKILL_TREE)); }
+    }
+
+    function saveSkillTree(tree) {
+        localStorage.setItem('skillTree', JSON.stringify(tree));
+    }
+
+    function updateDiplomacyUI() {
+        if (!dom.diplomacyTable) return;
+        dom.diplomacyTable.innerHTML = '';
+        const factions = Object.keys(state.factionRelations);
+        const headerRow = document.createElement('tr');
+        headerRow.appendChild(document.createElement('th'));
+        factions.forEach(f => { const th = document.createElement('th'); th.textContent = f; headerRow.appendChild(th); });
+        dom.diplomacyTable.appendChild(headerRow);
+        factions.forEach(rowFaction => {
+            const tr = document.createElement('tr');
+            const nameCell = document.createElement('th');
+            nameCell.textContent = rowFaction;
+            tr.appendChild(nameCell);
+            factions.forEach(colFaction => {
+                const td = document.createElement('td');
+                if (rowFaction === colFaction) { td.textContent = '—'; }
+                else { td.textContent = state.factionRelations[rowFaction][colFaction]; }
+                tr.appendChild(td);
+            });
+            dom.diplomacyTable.appendChild(tr);
+        });
+    }
+
+    function startDialogue(npc) {
+        if (!npc.dialogue) return;
+        let node = npc.dialogue[0];
+        dom.dialogueOverlay.classList.add('visible');
+        dom.dialogueOverlay.classList.remove('hidden');
+        function showNode(n) {
+            dom.dialogueText.textContent = n.text;
+            dom.dialogueChoices.innerHTML = '';
+            (n.choices || []).forEach((choice, idx) => {
+                const btn = document.createElement('button');
+                btn.textContent = choice;
+                btn.addEventListener('click', () => {
+                    const next = npc.dialogue[n.next[idx]];
+                    if (next) showNode(next);
+                    else dom.dialogueOverlay.classList.add('hidden');
+                });
+                dom.dialogueChoices.appendChild(btn);
+            });
+            if (!n.choices) {
+                const btn = document.createElement('button');
+                btn.textContent = 'Close';
+                btn.addEventListener('click', () => dom.dialogueOverlay.classList.add('hidden'));
+                dom.dialogueChoices.appendChild(btn);
+            }
+        }
+        showNode(node);
     }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
@@ -117,10 +193,13 @@ document.addEventListener('DOMContentLoaded', () => {
             this.color = config.COLOR; this.mass = config.RADIUS / 5; this.gravity = config.GRAVITY || 0;
             this.faction = config.FACTION || FACTIONS.NEUTRAL;
             this.behavior = config.BEHAVIOR || 'chase';
+            this.friendly = !!config.FRIENDLY;
+            this.dialogue = config.DIALOGUE || null;
             this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
+            if (this.friendly) return;
             let target = null;
             if (state.hostileFactions.has(this.faction)) {
                 target = state.player;
@@ -173,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (damageInfo.isCrit) createCritIndicator(this.x, this.y, damageInfo.amount);
             if (damageInfo.attacker instanceof Player) {
                 state.hostileFactions.add(this.faction);
+                adjustFactionRelation(this.faction, FACTIONS.NEUTRAL, -5);
             }
             if (this.hp <= 0) {
                 this.onDeath();
@@ -547,6 +627,26 @@ document.addEventListener('DOMContentLoaded', () => {
         ['add_sama_pulse', SamaPulseGun],
     ]);
 
+    const weaponNameMap = {
+        CANNON: BasicCannon,
+        SHARD: ShardLauncher,
+        ORBITER: OrbitingShield,
+        MISSILE: HomingMissileLauncher,
+        BEAM: LaserBeam,
+        MINE: MineLayer,
+        BLADE: KineticBlade,
+        RAILGUN: RailgunWeapon,
+        CHAIN_LIGHTNING: ChainLightningWeapon,
+        BLACK_HOLE: BlackHoleWeapon,
+        DRONE_FACTORY: DroneFactoryWeapon,
+        FORCE_FIELD: ForceFieldWeapon,
+        SAMA_PULSE: SamaPulseGun,
+    };
+
+    function weaponNameToClass(name) {
+        return weaponNameMap[name];
+    }
+
     function generateProceduralUpgrade() {
         const totalWeight = Object.values(rarityTiers).reduce((sum, tier) => sum + tier.weight, 0);
         let roll = Math.random() * totalWeight;
@@ -644,16 +744,34 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'START': dom.startMenu.classList.remove('hidden'); break;
             case 'PLAYING': resumeGame(); break;
             case 'LEVEL_UP': pauseGame(); displayUpgradeChoices(); dom.levelUpMenu.classList.remove('hidden'); break;
-            case 'GAME_OVER': pauseGame(); dom.finalScore.textContent = state.score; dom.finalWave.textContent = state.wave; dom.gameOverMenu.classList.remove('hidden'); break;
+            case 'GAME_OVER': pauseGame(); dom.finalScore.textContent = state.score; dom.finalWave.textContent = state.wave; dom.gameOverMenu.classList.remove('hidden'); saveSkillTree(state.skillTree); break;
         }
     }
     function startGame() {
+        dom.startMenu.classList.add('hidden');
+        dom.classMenu.classList.remove('hidden');
+        dom.classOptions.innerHTML = '';
+        Object.entries(PLAYER_CLASSES).forEach(([key, cls]) => {
+            const btn = document.createElement('button');
+            btn.textContent = cls.name;
+            btn.addEventListener('click', () => beginRun(key));
+            dom.classOptions.appendChild(btn);
+        });
+    }
+
+    function beginRun(classKey) {
         if (!musicStarted) { bgMusic.play().catch(e => console.log("Audio couldn't play:", e)); musicStarted = true; }
         const keys = state ? state.keys : {}; const mouse = state ? state.mouse : { x: 0, y: 0 };
         state = getInitialState();
         state.keys = keys;
         state.mouse = mouse;
+        const cls = PLAYER_CLASSES[classKey] || PLAYER_CLASSES.ENGINEER;
         state.player = new Player(state.map.WIDTH / 2, state.map.HEIGHT / 2);
+        cls.startingWeapons.forEach(w => {
+            const WeaponClass = weaponNameToClass(w);
+            if (WeaponClass && state.player.weapons.length < 8) state.player.weapons.push(new WeaponClass(state.player));
+        });
+        state.player.passives = cls.passives;
         state.camera.x = state.player.x - canvas.width / 2;
         state.camera.y = state.player.y - canvas.height / 2;
         const region = getRegionFor(state.player.x, state.player.y);
@@ -666,6 +784,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.mission = generateMission();
         nextWave();
+        dom.classMenu.classList.add('hidden');
+        updateDiplomacyUI();
         setGameState('PLAYING');
     }
     function pauseGame() { if (state.animationFrameId) { cancelAnimationFrame(state.animationFrameId); state.animationFrameId = null; } }
@@ -728,6 +848,15 @@ document.addEventListener('DOMContentLoaded', () => {
             region.enemies.push(enemy);
             state.enemies.push(enemy);
         }
+        if (Math.random() < 0.3) {
+            const npcCfg = CONFIG.ENEMY.NEUTRAL_TRADER;
+            const x = region.x + Math.random() * region.width;
+            const y = region.y + Math.random() * region.height;
+            const npc = Enemy.create(npcCfg, x, y);
+            npc.active = true;
+            npc.region = region;
+            state.enemies.push(npc);
+        }
     }
 
     function activateRegion(region) {
@@ -776,8 +905,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerRandomEvent() {
         const region = CONFIG.MAP.REGIONS[Math.floor(Math.random() * CONFIG.MAP.REGIONS.length)];
         const roll = Math.random();
-        if (roll < 0.4) spawnPirateRaid(region);
-        else if (roll < 0.7) spawnTechDrop(region);
+        if (roll < 0.3) spawnPirateRaid(region);
+        else if (roll < 0.6) spawnTechDrop(region);
+        else if (roll < 0.9) spawnFactionWar(region);
         else spawnWarpStorm(region);
     }
 
@@ -790,11 +920,30 @@ document.addEventListener('DOMContentLoaded', () => {
             enemy.active = true;
             state.enemies.push(enemy);
         }
+        adjustFactionRelation(FACTIONS.PIRATE, region.faction || FACTIONS.NEUTRAL, -5);
     }
 
     function spawnTechDrop(region) {
         const poi = { type: POI_TYPES.TECH_DROP, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, timeout: state.gameTime + 15000, radius: 10 };
         region.pois.push(poi);
+        if (region.faction) adjustFactionRelation(region.faction, FACTIONS.NEUTRAL, 5);
+    }
+
+    function spawnFactionWar(region) {
+        const factions = [FACTIONS.PIRATE, FACTIONS.SAMA];
+        const factionA = factions[Math.floor(Math.random()*factions.length)];
+        const factionB = factionA === FACTIONS.PIRATE ? FACTIONS.SAMA : FACTIONS.PIRATE;
+        for (let i=0;i<5;i++) {
+            const enemyA = Enemy.create(CONFIG.ENEMY.CHASER, region.x + Math.random()*region.width, region.y + Math.random()*region.height);
+            enemyA.faction = factionA;
+            enemyA.active = true;
+            state.enemies.push(enemyA);
+            const enemyB = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, region.x + Math.random()*region.width, region.y + Math.random()*region.height);
+            enemyB.faction = factionB;
+            enemyB.active = true;
+            state.enemies.push(enemyB);
+        }
+        adjustFactionRelation(factionA, factionB, -10);
     }
 
     function spawnWarpStorm(region) {
@@ -846,8 +995,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkPair = (e1, e2) => {
             const dx = e1.x - e2.x; const dy = e1.y - e2.y;
             if ((dx * dx + dy * dy) < (e1.radius + e2.radius) * (e1.radius + e2.radius)) {
-                if (e1 instanceof Player && e2 instanceof Enemy) e1.takeDamage(e2.damage);
-                else if (e2 instanceof Player && e1 instanceof Enemy) e2.takeDamage(e1.damage);
+                if (e1 instanceof Player && e2 instanceof Enemy && !e2.friendly) e1.takeDamage(e2.damage);
+                else if (e2 instanceof Player && e1 instanceof Enemy && !e1.friendly) e2.takeDamage(e1.damage);
+                else if (e1 instanceof Player && e2 instanceof Enemy && e2.friendly && e2.dialogue) startDialogue(e2);
+                else if (e2 instanceof Player && e1 instanceof Enemy && e1.friendly && e1.dialogue) startDialogue(e1);
                 else if (e1 instanceof Player && e2 instanceof XpOrb) { e1.addXp(e2.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e2); }
                 else if (e2 instanceof Player && e1 instanceof XpOrb) { e2.addXp(e1.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e1); }
                 else if (e1 instanceof Player && e2.type) handlePoiCollision(e2);
@@ -1256,6 +1407,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);
                 }
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const visible = dom.diplomacyOverlay.classList.toggle('visible');
+                    dom.diplomacyOverlay.classList.toggle('hidden', !visible);
+                    if (visible) updateDiplomacyUI();
+                }
                 if (e.key.toLowerCase() === 'p') {
                     state.autoFire = !state.autoFire;
                 }
@@ -1268,7 +1425,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
+        dom.closeDiplomacy.addEventListener('click', () => {
+            dom.diplomacyOverlay.classList.add('hidden');
+            dom.diplomacyOverlay.classList.remove('visible');
+        });
         state = getInitialState();
+        updateDiplomacyUI();
         setGameState('START');
     }
 

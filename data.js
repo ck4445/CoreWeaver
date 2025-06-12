@@ -41,10 +41,15 @@ function generateMapRegions(width, height) {
         const j = Math.floor(Math.random() * (i + 1));
         [cells[i], cells[j]] = [cells[j], cells[i]];
     }
+
     const pirateCount = Math.floor(cells.length * 0.25);
     const samaCount = Math.floor(cells.length * 0.25);
     const regions = [];
     cells.forEach((cell, idx) => {
+        const w = cell.width * (0.8 + Math.random() * 0.4);
+        const h = cell.height * (0.8 + Math.random() * 0.4);
+        const cx = cell.x + cell.width / 2 + (Math.random() - 0.5) * cell.width * 0.2;
+        const cy = cell.y + cell.height / 2 + (Math.random() - 0.5) * cell.height * 0.2;
         let faction, name, color, music;
         if (idx < pirateCount) {
             faction = FACTIONS.PIRATE;
@@ -63,7 +68,12 @@ function generateMapRegions(width, height) {
             music = 'dead_space.ogg';
         }
         regions.push({
-            ...cell,
+            x: cx - w / 2,
+            y: cy - h / 2,
+            width: w,
+            height: h,
+            cx,
+            cy,
             name,
             faction,
             color,
@@ -95,7 +105,7 @@ function populatePOIs(regions) {
 const CONFIG = {
     PLAYER: {
         RADIUS: 12, MAX_HP: 100, SPEED: 1.7, ROTATION_SPEED: 0.08, FRICTION: 0.9, INVINCIBILITY_DURATION: 1000, MAGNET_RADIUS: 120,
-        XP_TO_NEXT_LEVEL_BASE: 100, XP_LEVEL_MULTIPLIER: 1.5, BASE_CRIT_CHANCE: 0.05, BASE_CRIT_DAMAGE: 1.5,
+        XP_TO_NEXT_LEVEL_BASE: 60, XP_LEVEL_MULTIPLIER: 1.5, BASE_CRIT_CHANCE: 0.05, BASE_CRIT_DAMAGE: 1.5,
         GRAVITY: 100, // Player is a significant gravity source
     },
     PHYSICS: {
@@ -148,19 +158,19 @@ const CONFIG = {
 
 // --- The rest of data.js (weaponUpgradePool, etc.) remains unchanged. ---
 const weaponUpgradePool = [
-    { id: 'add_cannon', name: 'New Weapon: Basic Cannon', desc: 'Fires a steady stream of projectiles.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new BasicCannon(p)); } },
-    { id: 'add_shard_launcher', name: 'New Weapon: Shard Launcher', desc: 'Periodically unleashes a nova of piercing shards.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ShardLauncher(p)); } },
-    { id: 'add_orbiting_shield', name: 'New Weapon: Orbiting Shield', desc: 'Summons a shield that damages enemies on contact.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new OrbitingShield(p)); } },
-    { id: 'add_homing_missile', name: 'New Weapon: Homing Missile', desc: 'Launches missiles that seek the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new HomingMissileLauncher(p)); } },
-    { id: 'add_laser_beam', name: 'New Weapon: Laser Beam', desc: 'Fires a continuous beam at the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new LaserBeam(p)); } },
-    { id: 'add_mine_layer', name: 'New Weapon: Mine Layer', desc: 'Drops proximity mines that explode.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new MineLayer(p)); } },
-    { id: 'add_kinetic_blade', name: 'New Weapon: Kinetic Blade', desc: 'A short-range energy slash that hits multiple enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new KineticBlade(p)); } },
-    { id: 'add_railgun', name: 'New Weapon: Railgun', desc: 'Fires a high-velocity, piercing shot.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new RailgunWeapon(p)); } },
-    { id: 'add_chain_lightning', name: 'New Weapon: Chain Lightning', desc: 'Unleashes a bolt that jumps between enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ChainLightningWeapon(p)); } },
-    { id: 'add_black_hole', name: 'New Weapon: Black Hole', desc: 'Launches a singularity that pulls in and destroys foes.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new BlackHoleWeapon(p)); } },
-    { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new DroneFactoryWeapon(p)); } },
-    { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new ForceFieldWeapon(p)); } },
-    { id: 'add_sama_pulse', name: 'New Weapon: Sama Pulse', desc: 'Powerful shots obtainable only in Sama Space.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 5) p.weapons.push(new SamaPulseGun(p)); } },
+    { id: 'add_cannon', name: 'New Weapon: Basic Cannon', desc: 'Fires a steady stream of projectiles.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new BasicCannon(p)); } },
+    { id: 'add_shard_launcher', name: 'New Weapon: Shard Launcher', desc: 'Periodically unleashes a nova of piercing shards.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ShardLauncher(p)); } },
+    { id: 'add_orbiting_shield', name: 'New Weapon: Orbiting Shield', desc: 'Summons a shield that damages enemies on contact.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new OrbitingShield(p)); } },
+    { id: 'add_homing_missile', name: 'New Weapon: Homing Missile', desc: 'Launches missiles that seek the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new HomingMissileLauncher(p)); } },
+    { id: 'add_laser_beam', name: 'New Weapon: Laser Beam', desc: 'Fires a continuous beam at the nearest enemy.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new LaserBeam(p)); } },
+    { id: 'add_mine_layer', name: 'New Weapon: Mine Layer', desc: 'Drops proximity mines that explode.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new MineLayer(p)); } },
+    { id: 'add_kinetic_blade', name: 'New Weapon: Kinetic Blade', desc: 'A short-range energy slash that hits multiple enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new KineticBlade(p)); } },
+    { id: 'add_railgun', name: 'New Weapon: Railgun', desc: 'Fires a high-velocity, piercing shot.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new RailgunWeapon(p)); } },
+    { id: 'add_chain_lightning', name: 'New Weapon: Chain Lightning', desc: 'Unleashes a bolt that jumps between enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ChainLightningWeapon(p)); } },
+    { id: 'add_black_hole', name: 'New Weapon: Black Hole', desc: 'Launches a singularity that pulls in and destroys foes.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new BlackHoleWeapon(p)); } },
+    { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new DroneFactoryWeapon(p)); } },
+    { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ForceFieldWeapon(p)); } },
+    { id: 'add_sama_pulse', name: 'New Weapon: Sama Pulse', desc: 'Powerful shots obtainable only in Sama Space.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new SamaPulseGun(p)); } },
 ];
 const genericUpgradeTemplates = [
     { name: 'Damage', stat: 'damageMultiplier', base: 0.05, tag: 'OFFENSE', desc: 'Weapon damage' },

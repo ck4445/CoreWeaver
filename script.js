@@ -559,7 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getUpgradeChoices() {
         const choices = [];
         const player = state.player;
-        const maxWeapons = 5;
+        const maxWeapons = 8;
         const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
         if (player.weapons.length < maxWeapons && state.levelUpRegion && state.levelUpRegion.faction === FACTIONS.SAMA) {
             const sama = weaponUpgradePool.find(w => w.id === 'add_sama_pulse');
@@ -610,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade.apply(player);
         } else {
             const WeaponClass = weaponConstructors.get(upgrade.id);
-            if (WeaponClass && player.weapons.length < 5) {
+            if (WeaponClass && player.weapons.length < 8) {
                 player.weapons.push(new WeaponClass(player));
             }
         }
@@ -781,7 +781,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const region = CONFIG.MAP.REGIONS[Math.floor(Math.random()*CONFIG.MAP.REGIONS.length)];
         const poi = { type: POI_TYPES.MISSION_DATA, x: region.x + Math.random()*region.width, y: region.y + Math.random()*region.height, collected: false, radius: 10 };
         region.pois.push(poi);
-        return { type: 'DATA', region, poi, description: `Recover data from ${region.name}`, completed: false };
+        const description = `Recover mission data at ${region.name}. Check your map for the marker.`;
+        return { type: 'DATA', region, poi, description, completed: false };
     }
 
     let spatialGrid;
@@ -966,6 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.projectiles.forEach(p => p.draw());
         ctx.globalCompositeOperation = 'source-over';
         ctx.restore();
+        drawMissionPointer();
 
         dom.waveCounter.textContent = state.wave;
         dom.scoreCounter.textContent = state.score;
@@ -1065,18 +1067,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleY = dom.minimap.height / view;
         mCtx.clearRect(0,0,dom.minimap.width, dom.minimap.height);
         CONFIG.MAP.REGIONS.forEach(r => {
-            const rx = r.x - minX, ry = r.y - minY;
-            if (rx + r.width < 0 || ry + r.height < 0 || rx > view || ry > view) return;
+            const rx = r.cx - minX, ry = r.cy - minY;
+            if (rx + r.width/2 < 0 || ry + r.height/2 < 0 || rx - r.width/2 > view || ry - r.height/2 > view) return;
+            mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
+            mCtx.beginPath();
+            mCtx.ellipse(rx*scaleX, ry*scaleY, (r.width/2)*scaleX, (r.height/2)*scaleY, 0, 0, Math.PI*2);
+            mCtx.fill();
             if (r.discovered) {
-                mCtx.fillStyle = r.color || '#444';
-                mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '10px sans-serif';
                 mCtx.textAlign = 'center';
-                mCtx.fillText(r.name, (rx + r.width/2)*scaleX, (ry + r.height/2)*scaleY);
-            } else {
-                mCtx.fillStyle = '#111';
-                mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
+                mCtx.fillText(r.name, rx*scaleX, ry*scaleY);
             }
         });
         state.enemies.forEach(e => {
@@ -1084,7 +1085,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const ex = (e.x - minX) * scaleX;
             const ey = (e.y - minY) * scaleY;
             mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
-            mCtx.fillRect(ex-1, ey-1, 2, 2);
+            mCtx.beginPath();
+            mCtx.arc(ex, ey, 2, 0, Math.PI*2);
+            mCtx.fill();
         });
         getAllPOIs().forEach(poi => {
             const px = (poi.x - minX) * scaleX;
@@ -1092,8 +1095,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
             else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
             else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
+            else if (poi === state.mission?.poi && !state.mission.completed) mCtx.fillStyle = '#ffff00';
             else mCtx.fillStyle = '#ffff00';
-            mCtx.fillRect(px-1, py-1, 2, 2);
+            mCtx.beginPath();
+            mCtx.arc(px, py, poi === state.mission?.poi && !state.mission.completed ? 3 : 2, 0, Math.PI*2);
+            mCtx.fill();
+            if (poi === state.mission?.poi && !state.mission.completed) {
+                mCtx.strokeStyle = '#ffffff';
+                mCtx.lineWidth = 1;
+                mCtx.stroke();
+            }
         });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
@@ -1110,34 +1121,65 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleY = canvasMap.height / state.map.HEIGHT;
         mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
         CONFIG.MAP.REGIONS.forEach(r => {
+            mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
+            mCtx.beginPath();
+            mCtx.ellipse(r.cx*scaleX, r.cy*scaleY, (r.width/2)*scaleX, (r.height/2)*scaleY, 0, 0, Math.PI*2);
+            mCtx.fill();
             if (r.discovered) {
-                mCtx.fillStyle = r.color || '#444';
-                mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '16px sans-serif';
                 mCtx.textAlign = 'center';
-                mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
-            } else {
-                mCtx.fillStyle = '#111';
-                mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+                mCtx.fillText(r.name, r.cx*scaleX, r.cy*scaleY);
             }
         });
         state.enemies.forEach(e => {
             if (!e.isWave && !e.active) return;
             mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
-            mCtx.fillRect(e.x*scaleX-2, e.y*scaleY-2, 4, 4);
+            mCtx.beginPath();
+            mCtx.arc(e.x*scaleX, e.y*scaleY, 3, 0, Math.PI*2);
+            mCtx.fill();
         });
         getAllPOIs().forEach(poi => {
             if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
             else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
             else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
+            else if (poi === state.mission?.poi && !state.mission.completed) mCtx.fillStyle = '#ffff00';
             else mCtx.fillStyle = '#ffff00';
-            mCtx.fillRect(poi.x*scaleX-2, poi.y*scaleY-2, 4, 4);
+            mCtx.beginPath();
+            mCtx.arc(poi.x*scaleX, poi.y*scaleY, poi === state.mission?.poi && !state.mission.completed ? 4 : 3, 0, Math.PI*2);
+            mCtx.fill();
+            if (poi === state.mission?.poi && !state.mission.completed) {
+                mCtx.strokeStyle = '#ffffff';
+                mCtx.lineWidth = 1;
+                mCtx.stroke();
+            }
         });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
         mCtx.arc(state.player.x*scaleX, state.player.y*scaleY, 5, 0, Math.PI*2);
         mCtx.fill();
+    }
+
+    function drawMissionPointer() {
+        if (!state.mission || state.mission.completed) return;
+        const poi = state.mission.poi;
+        if (!poi) return;
+        const x = poi.x - state.camera.x;
+        const y = poi.y - state.camera.y;
+        if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) return;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const angle = Math.atan2(y - cy, x - cx);
+        const dist = Math.min(cx, cy) - 20;
+        const ax = cx + Math.cos(angle) * dist;
+        const ay = cy + Math.sin(angle) * dist;
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - Math.cos(angle - Math.PI/6) * 12, ay - Math.sin(angle - Math.PI/6) * 12);
+        ctx.lineTo(ax - Math.cos(angle + Math.PI/6) * 12, ay - Math.sin(angle + Math.PI/6) * 12);
+        ctx.closePath();
+        ctx.fill();
     }
 
     function reCenterCamera() {

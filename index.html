@@ -15,12 +15,89 @@
     <div id="map-overlay" class="hidden" aria-hidden="true">
         <canvas id="map-canvas"></canvas>
     </div>
+    <div id="diplomacy-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card diplomacy-card">
+            <h2>Faction Diplomacy</h2>
+            <table id="diplomacy-table" aria-label="Faction relations"></table>
+            <button id="close-diplomacy">Close</button>
+        </div>
+    </div>
+    <div id="trade-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card trade-card">
+            <h2>Trade Hub</h2>
+            <div id="trade-items"></div>
+            <div class="final-stats">Credits: <span id="credit-count">0</span></div>
+            <button id="close-trade">Close</button>
+        </div>
+    </div>
+    <div id="quest-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card quest-card">
+            <h2>Mission Log</h2>
+            <ul id="quest-list"></ul>
+            <button id="close-quests">Close</button>
+        </div>
+    </div>
+    <div id="dialogue-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card">
+            <div id="dialogue-text"></div>
+            <div id="dialogue-choices"></div>
+        </div>
+    </div>
+
+    <div id="news-sidebar" class="hidden"></div>
+
+    <div id="control-panel" class="hidden" aria-hidden="true">
+        <div class="menu-card control-card">
+            <div id="app-grid">
+                <div class="app-icon" data-app="diplomacy" role="button" aria-label="Diplomacy">🛡️</div>
+                <div class="app-icon" data-app="news" role="button" aria-label="News">📰</div>
+                <div class="app-icon" data-app="quests" role="button" aria-label="Quests">📜</div>
+                <div class="app-icon" data-app="skills" role="button" aria-label="Skill Tree">🌿</div>
+                <div class="app-icon" data-app="stats" role="button" aria-label="Stats">📊</div>
+                <div class="app-icon" data-app="mods" role="button" aria-label="Modifiers">🧬</div>
+            </div>
+            <button id="close-control">Close</button>
+        </div>
+    </div>
+
+    <div id="news-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card news-card">
+            <h2>News Feed</h2>
+            <ul id="news-list"></ul>
+            <button id="close-news">Close</button>
+        </div>
+    </div>
+
+    <div id="stats-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card stats-card">
+            <h2>Pilot Stats</h2>
+            <div id="stats-content"></div>
+            <button id="close-stats">Close</button>
+        </div>
+    </div>
+
+    <div id="skills-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card skills-card">
+            <h2>Skill Tree</h2>
+            <div id="skills-content"></div>
+            <button id="close-skills">Close</button>
+        </div>
+    </div>
+
+    <div id="mods-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card mods-card">
+            <h2>Active Modifiers</h2>
+            <div id="mods-content"></div>
+            <button id="close-mods">Close</button>
+        </div>
+    </div>
 
     <div id="game-hud" class="hidden">
         <div id="hud-top">
             <div class="hud-stat">Wave: <span id="wave-counter">1</span></div>
             <div class="hud-stat">Score: <span id="score-counter">0</span></div>
             <div class="hud-stat" id="mission-info"></div>
+            <div class="hud-stat">Credits: <span id="credit-hud">0</span></div>
         </div>
         <div id="hud-bottom">
             <div id="hp-bar-container" class="hud-bar-container">
@@ -48,6 +125,12 @@
                 <li>Press <strong>M</strong> to open the map</li>
             </ul>
             <button id="start-button">Begin Run</button>
+        </div>
+
+        <div id="class-select-menu" class="menu-card hidden">
+            <h2>Select Your Background</h2>
+            <p>Choose a starting archetype.</p>
+            <div id="class-options"></div>
         </div>
 
         <div id="level-up-menu" class="menu-card hidden">

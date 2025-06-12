@@ -47,6 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let state, musicStarted = false;
     const MINIMAP_VIEW = 30000;
     let mapZoom = 0.25;
+    const FACTION_UNIT_POOLS = {
+        [FACTIONS.PIRATE]: [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER, CONFIG.ENEMY.SHOOTER],
+        [FACTIONS.SAMA]: [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER],
+    };
 
     function generateBackground(width, height) {
         const stars = [];
@@ -414,11 +418,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         findTarget() {
-            let best = null; let bestDistSq = Infinity;
+            const range = this.config.AGGRO_RANGE || 300;
+            let best = null;
+            let bestDistSq = range * range;
             for (const e of state.enemies) {
                 if (e === this || e.faction === this.faction) continue;
-                const dx = e.x - this.x; const dy = e.y - this.y; const distSq = dx * dx + dy * dy;
-                if (distSq < bestDistSq && distSq < 90000) { best = e; bestDistSq = distSq; }
+                const dx = e.x - this.x;
+                const dy = e.y - this.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < bestDistSq) {
+                    best = e;
+                    bestDistSq = distSq;
+                }
             }
             return best;
         }
@@ -480,31 +491,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 target = state.player;
             }
             if (!target) target = this.findTarget();
+let movementTarget = target;
+let firingTarget = target;
 
-            let movementTarget = target;
-            let firingTarget = target;
+if (this.isWave && !target) {
+    movementTarget = state.player;
+    firingTarget = state.player;
+}
 
-            if (this.isWave && !target) {
-                movementTarget = state.player;
-                firingTarget = state.player;
-            }
+if (movementTarget) {
+    const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+    if (dist > prefer) {
+        const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
+        this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
+    } else if (dist < prefer * 0.8) {
+        const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
+        this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
+    }
+} else { // No movement target (either non-wave with no faction target, or wave with no target at all)
+    this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+    if (this.wanderTimer <= 0) { 
+        this.wanderAngle = Math.random() * Math.PI * 2; 
+        this.wanderTimer = 1000 + Math.random() * 2000; 
+    }
+    this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
+    this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
+}
 
-            if (movementTarget) {
-                const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
-                const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
-                if (dist > prefer) {
-                    const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
-                    this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
-                } else if (dist < prefer * 0.8) {
-                    const spd = this.speed * Math.min(1, (prefer * 0.8 - dist) / prefer);
-                    this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
-                }
-            } else { // No movement target (either non-wave with no faction target, or wave with no target at all)
-                this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
-                if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
-                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
-                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
-            }
 
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
             if (this.fireCooldown <= 0 && firingTarget) { // Firing only if there's a valid firingTarget
@@ -1203,10 +1217,12 @@ document.addEventListener('DOMContentLoaded', () => {
             attackers: [],
             defenders: [],
         };
-        for (let i = 0; i < 4; i++) {
-            const ax = targetRegion.x + Math.random()*targetRegion.width;
-            const ay = targetRegion.y + Math.random()*targetRegion.height;
-            const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
+for (let i = 0; i < 4; i++) {
+    const ax = targetRegion.x + Math.random() * targetRegion.width;
+    const ay = targetRegion.y + Math.random() * targetRegion.height;
+    const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
+}
+
             enemyA.faction = attacker;
             enemyA.active = true;
             enemyA.invasion = invasion;
@@ -1216,7 +1232,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.enemies.push(enemyA);
             const dx = targetRegion.x + Math.random()*targetRegion.width;
             const dy = targetRegion.y + Math.random()*targetRegion.height;
-            const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
+const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
+
             enemyD.faction = defender;
             enemyD.active = true;
             enemyD.invasion = invasion;

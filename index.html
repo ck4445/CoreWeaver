@@ -22,6 +22,21 @@
             <button id="close-diplomacy">Close</button>
         </div>
     </div>
+    <div id="trade-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card trade-card">
+            <h2>Trade Hub</h2>
+            <div id="trade-items"></div>
+            <div class="final-stats">Credits: <span id="credit-count">0</span></div>
+            <button id="close-trade">Close</button>
+        </div>
+    </div>
+    <div id="quest-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card quest-card">
+            <h2>Mission Log</h2>
+            <ul id="quest-list"></ul>
+            <button id="close-quests">Close</button>
+        </div>
+    </div>
     <div id="dialogue-overlay" class="hidden" aria-hidden="true">
         <div class="menu-card">
             <div id="dialogue-text"></div>
@@ -34,6 +49,7 @@
             <div class="hud-stat">Wave: <span id="wave-counter">1</span></div>
             <div class="hud-stat">Score: <span id="score-counter">0</span></div>
             <div class="hud-stat" id="mission-info"></div>
+            <div class="hud-stat">Credits: <span id="credit-hud">0</span></div>
         </div>
         <div id="hud-bottom">
             <div id="hp-bar-container" class="hud-bar-container">

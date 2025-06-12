@@ -37,12 +37,54 @@
             <button id="close-quests">Close</button>
         </div>
     </div>
+    <div id="control-panel" class="hidden" aria-hidden="true">
+        <div class="menu-card control-panel-card">
+            <div id="app-grid">
+                <div class="app-icon" data-app="diplomacy" aria-label="Diplomacy" role="button">🛡️</div>
+                <div class="app-icon" data-app="news" aria-label="News" role="button">📰</div>
+                <div class="app-icon" data-app="quests" aria-label="Quests" role="button">📜</div>
+                <div class="app-icon" data-app="skills" aria-label="Skills" role="button">🌿</div>
+                <div class="app-icon" data-app="stats" aria-label="Stats" role="button">📊</div>
+                <div class="app-icon" data-app="modifiers" aria-label="Modifiers" role="button">🧬</div>
+            </div>
+            <button id="close-control-panel">Close</button>
+        </div>
+    </div>
+    <div id="news-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card news-card">
+            <h2>News Feed</h2>
+            <ul id="news-list"></ul>
+            <button class="close-app" data-target="news-overlay">Close</button>
+        </div>
+    </div>
+    <div id="skill-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card skill-card">
+            <h2>Skill Tree</h2>
+            <pre id="skill-tree-view"></pre>
+            <button class="close-app" data-target="skill-overlay">Close</button>
+        </div>
+    </div>
+    <div id="stats-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card stats-card">
+            <h2>Player Stats</h2>
+            <pre id="stats-view"></pre>
+            <button class="close-app" data-target="stats-overlay">Close</button>
+        </div>
+    </div>
+    <div id="modifiers-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card modifiers-card">
+            <h2>Active Modifiers</h2>
+            <ul id="modifiers-list"></ul>
+            <button class="close-app" data-target="modifiers-overlay">Close</button>
+        </div>
+    </div>
     <div id="dialogue-overlay" class="hidden" aria-hidden="true">
         <div class="menu-card">
             <div id="dialogue-text"></div>
             <div id="dialogue-choices"></div>
         </div>
     </div>
+    <div id="news-popup" class="hidden" aria-live="polite"></div>
 
     <div id="game-hud" class="hidden">
         <div id="hud-top">
@@ -73,7 +115,7 @@
             <p class="tagline">Chart a course through hostile space.</p>
             <ul class="how-to">
                 <li>Move with <strong>WASD</strong> or <strong>Arrow Keys</strong></li>
-                <li>Auto-fire with the <strong>Mouse</strong></li>
+                <li>Toggle auto-fire with the <strong>Middle Mouse</strong></li>
                 <li>Press <strong>M</strong> to open the map</li>
             </ul>
             <button id="start-button">Begin Run</button>

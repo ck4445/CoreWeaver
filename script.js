@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const bgMusic = document.getElementById('bg-music');
+    let newsPopupTimeout = null;
 
     const dom = {
         hud: document.getElementById('game-hud'), waveCounter: document.getElementById('wave-counter'), scoreCounter: document.getElementById('score-counter'),
@@ -32,6 +33,17 @@ document.addEventListener('DOMContentLoaded', () => {
         questOverlay: document.getElementById('quest-overlay'),
         questList: document.getElementById('quest-list'),
         closeQuests: document.getElementById('close-quests'),
+        controlPanel: document.getElementById('control-panel'),
+        closeControl: document.getElementById('close-control-panel'),
+        newsOverlay: document.getElementById('news-overlay'),
+        newsList: document.getElementById('news-list'),
+        skillOverlay: document.getElementById('skill-overlay'),
+        skillTreeView: document.getElementById('skill-tree-view'),
+        statsOverlay: document.getElementById('stats-overlay'),
+        statsView: document.getElementById('stats-view'),
+        modifiersOverlay: document.getElementById('modifiers-overlay'),
+        modifiersList: document.getElementById('modifiers-list'),
+        newsPopup: document.getElementById('news-popup'),
     };
 
     let state, musicStarted = false;
@@ -72,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
             autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
+            newsFeed: [],
             hostileFactions: new Set(),
             factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
             skillTree: loadSkillTree(),
@@ -208,6 +221,76 @@ document.addEventListener('DOMContentLoaded', () => {
             li.textContent = (m.completed ? '[Done] ' : '') + m.description;
             dom.questList.appendChild(li);
         });
+    }
+
+    function updateNewsFeed() {
+        dom.newsList.innerHTML = '';
+        const items = [...state.newsFeed].sort((a,b) => b.timestamp - a.timestamp);
+        items.forEach(n => {
+            const li = document.createElement('li');
+            li.textContent = n.message;
+            li.style.color = n.color || '';
+            dom.newsList.appendChild(li);
+        });
+    }
+
+    function updateSkillViewer() {
+        dom.skillTreeView.textContent = JSON.stringify(state.skillTree, null, 2);
+    }
+
+    function updateStatsView() {
+        if (!state.player) return;
+        const stats = {
+            level: state.player.level,
+            xp: state.player.xp,
+            credits: state.credits,
+            hp: `${state.player.hp}/${state.player.maxHp}`,
+        };
+        dom.statsView.textContent = JSON.stringify(stats, null, 2);
+    }
+
+    function updateModifiersView() {
+        if (!state.player) return;
+        dom.modifiersList.innerHTML = '';
+        const mods = [
+            {name:'Damage', val: `${((state.player.damageMultiplier-1)*100).toFixed(0)}%`},
+            {name:'Fire Rate', val: `${((state.player.fireRateMultiplier-1)*100).toFixed(0)}%`},
+            {name:'Projectile Speed', val: `${((state.player.projectileSpeedMultiplier-1)*100).toFixed(0)}%`},
+            {name:'Area', val: `${((state.player.areaMultiplier-1)*100).toFixed(0)}%`},
+        ];
+        mods.forEach(m => { const li=document.createElement('li'); li.textContent=`${m.name}: ${m.val}`; dom.modifiersList.appendChild(li); });
+    }
+
+    function toggleControlPanel(force) {
+        const show = typeof force === 'boolean' ? force : dom.controlPanel.classList.contains('hidden');
+        dom.controlPanel.classList.toggle('hidden', !show);
+        dom.controlPanel.classList.toggle('visible', show);
+    }
+
+    function openApp(id) {
+        toggleControlPanel(false);
+        const map = {
+            diplomacy: dom.diplomacyOverlay,
+            quests: dom.questOverlay,
+            news: dom.newsOverlay,
+            skills: dom.skillOverlay,
+            stats: dom.statsOverlay,
+            modifiers: dom.modifiersOverlay,
+        };
+        Object.values(map).forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('visible');
+        });
+        const target = map[id];
+        if (!target) return;
+        target.classList.add('visible');
+        target.classList.remove('hidden');
+        if (id === 'diplomacy') updateDiplomacyUI();
+        if (id === 'quests') updateQuestLog();
+        if (id === 'news') updateNewsFeed();
+        if (id === 'skills') updateSkillViewer();
+        if (id === 'stats') updateStatsView();
+        if (id === 'modifiers') updateModifiersView();
     }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
@@ -982,9 +1065,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerRandomEvent() {
         const region = CONFIG.MAP.REGIONS[Math.floor(Math.random() * CONFIG.MAP.REGIONS.length)];
         const roll = Math.random();
-        if (roll < 0.3) spawnPirateRaid(region);
-        else if (roll < 0.6) spawnTechDrop(region);
-        else if (roll < 0.9) spawnFactionWar(region);
+        if (roll < 0.25) spawnPirateRaid(region);
+        else if (roll < 0.5) spawnTechDrop(region);
+        else if (roll < 0.75) spawnFactionWar(region);
+        else if (roll < 0.95) spawnSectorInvasion();
         else spawnWarpStorm(region);
     }
 
@@ -1025,6 +1109,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function spawnWarpStorm(region) {
         region.events.push({ type: 'warpStorm', end: state.gameTime + 15000 });
+    }
+
+    function spawnSectorInvasion() {
+        const occupied = CONFIG.MAP.REGIONS.filter(r => r.faction);
+        if (occupied.length < 2) return;
+        const attackerRegion = occupied[Math.floor(Math.random()*occupied.length)];
+        let targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
+        while (targetRegion === attackerRegion) targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
+        const attacker = attackerRegion.faction;
+        const defender = targetRegion.faction;
+        const winner = Math.random() < 0.5 ? attacker : defender;
+        targetRegion.faction = winner;
+        const msg = `[${winner}] captured ${targetRegion.name}`;
+        state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[winner]});
+        dom.newsPopup.textContent = msg;
+        dom.newsPopup.classList.remove('hidden');
+        clearTimeout(newsPopupTimeout);
+        newsPopupTimeout = setTimeout(() => {
+            dom.newsPopup.classList.add('hidden');
+        }, 5000);
     }
 
     function handlePoiCollision(poi) {
@@ -1500,8 +1604,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     dom.questOverlay.classList.toggle('hidden', !visible);
                     if (visible) updateQuestLog();
                 }
-                if (e.key.toLowerCase() === 'p') {
-                    state.autoFire = !state.autoFire;
+                if (e.key.toLowerCase() === 'c') {
+                    toggleControlPanel();
                 }
                 if (state.showMap && (e.key === '+' || e.key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
                 if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
@@ -1509,6 +1613,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
+        window.addEventListener('mousedown', e => {
+            if (e.button === 1 && state) {
+                state.autoFire = !state.autoFire;
+                e.preventDefault();
+            }
+        });
         document.addEventListener('visibilitychange', () => { if(document.hidden) pauseGame(); else resumeGame(); });
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
@@ -1520,6 +1630,24 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.closeQuests.addEventListener('click', () => {
             dom.questOverlay.classList.add('hidden');
             dom.questOverlay.classList.remove('visible');
+        });
+        if (dom.closeControl) dom.closeControl.addEventListener('click', () => toggleControlPanel(false));
+        document.querySelectorAll('.app-icon').forEach(icon => {
+            icon.addEventListener('click', () => openApp(icon.dataset.app));
+        });
+        document.querySelectorAll('.close-app').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = document.getElementById(btn.dataset.target);
+                if (target) {
+                    target.classList.add('hidden');
+                    target.classList.remove('visible');
+                }
+            });
+        });
+        if (dom.newsPopup) dom.newsPopup.addEventListener('click', () => {
+            openApp('news');
+            toggleControlPanel(false);
+            dom.newsPopup.classList.add('hidden');
         });
         state = getInitialState();
         updateDiplomacyUI();

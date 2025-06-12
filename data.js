@@ -54,6 +54,8 @@ const POI_TYPES = {
     MISSION_DATA: 'Mission Data',
 };
 
+const BIOME_TYPES = ['Nebula', 'Void Rift', 'Crystal Zone', 'Asteroid Field'];
+
 function rectsOverlap(a, b) {
     return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
              a.y + a.height <= b.y || b.y + b.height <= a.y);
@@ -100,6 +102,7 @@ function generateMapRegions(width, height) {
     cells.forEach((cell, idx) => {
         const shape = createPolygon(cell);
         let faction, name, color, music;
+        const biome = BIOME_TYPES[Math.floor(Math.random()*BIOME_TYPES.length)];
         if (idx < pirateCount) {
             faction = FACTIONS.PIRATE;
             name = 'Pirate Outpost';
@@ -122,6 +125,7 @@ function generateMapRegions(width, height) {
             faction,
             color,
             music,
+            biome,
             discovered: false,
             cleared: false,
             pois: [],
@@ -172,9 +176,22 @@ const CONFIG = {
         SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#F4A460', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
         NEUTRAL_TRADER: { RADIUS: 10, HP: 40, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#cccccc', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true,
             DIALOGUE: [
-                { id: 'start', text: 'Greetings traveler. Interested in some goods?', choices: ['Show me', 'Leave'], next: ['trade', 'end'] },
-                { id: 'trade', text: 'Sorry, shop is under construction.' },
+                { id: 'start', text: 'Greetings traveler. Interested in some goods or work?', choices: ['Trade', 'Job', 'Leave'], next: ['trade', 'mission', 'end'] },
+                { id: 'trade', text: 'Take a look.', action: 'openTrade' },
+                { id: 'mission', text: 'I need data from a nearby derelict.', action: 'offerMission' },
                 { id: 'end', text: 'Safe travels.' }
+            ] },
+        SAMA_AGENT: { RADIUS: 10, HP: 30, SPEED: 0.9, DAMAGE: 0, XP: 0, COLOR: '#4dffd4', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.SAMA, FRIENDLY: true,
+            DIALOGUE: [
+                { id: 'start', text: 'The Sama Empire seeks allies. Will you aid us?', choices: ['Yes', 'No'], next: ['mission', 'end'] },
+                { id: 'mission', text: 'Retrieve stolen tech from pirates.', action: 'offerMission' },
+                { id: 'end', text: 'Very well.' }
+            ] },
+        PIRATE_BROKER: { RADIUS: 10, HP: 30, SPEED: 0.9, DAMAGE: 0, XP: 0, COLOR: '#ff4d4d', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.PIRATE, FRIENDLY: true,
+            DIALOGUE: [
+                { id: 'start', text: 'Psst, looking for work?', choices: ['What job?', 'Leave'], next: ['mission', 'end'] },
+                { id: 'mission', text: 'Sabotage a Sama shipment for us.', action: 'offerMission' },
+                { id: 'end', text: 'Maybe next time.' }
             ] },
     },
     MAP: {

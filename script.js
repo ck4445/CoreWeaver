@@ -24,6 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
         dialogueOverlay: document.getElementById('dialogue-overlay'),
         dialogueText: document.getElementById('dialogue-text'),
         dialogueChoices: document.getElementById('dialogue-choices'),
+        tradeOverlay: document.getElementById('trade-overlay'),
+        tradeItems: document.getElementById('trade-items'),
+        closeTrade: document.getElementById('close-trade'),
+        creditHud: document.getElementById('credit-hud'),
+        creditCount: document.getElementById('credit-count'),
+        questOverlay: document.getElementById('quest-overlay'),
+        questList: document.getElementById('quest-list'),
+        closeQuests: document.getElementById('close-quests'),
     };
 
     let state, musicStarted = false;
@@ -63,10 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
-            autoFire: false, events: [], eventTimer: 10000, mission: null, speedBoost: 1,
+            autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
             hostileFactions: new Set(),
             factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
             skillTree: loadSkillTree(),
+            credits: 0,
         };
     }
 
@@ -74,6 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.factionRelations[f1] || !state.factionRelations[f2]) return;
         state.factionRelations[f1][f2] = Math.max(-100, Math.min(100, state.factionRelations[f1][f2] + amount));
         state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] - amount));
+        if (state.factionRelations[f1][f2] <= -60) state.hostileFactions.add(f1);
+        if (state.factionRelations[f1][f2] > -30) state.hostileFactions.delete(f1);
         updateDiplomacyUI();
     }
 
@@ -120,9 +131,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const btn = document.createElement('button');
                 btn.textContent = choice;
                 btn.addEventListener('click', () => {
-                    const next = npc.dialogue[n.next[idx]];
-                    if (next) showNode(next);
-                    else dom.dialogueOverlay.classList.add('hidden');
+                    const nextKey = n.next[idx];
+                    const next = npc.dialogue[nextKey];
+                    if (next && !next.action) { showNode(next); return; }
+                    dom.dialogueOverlay.classList.add('hidden');
+                    if (next && next.action === 'openTrade') openTrade(npc);
+                    else if (next && next.action === 'offerMission') offerMission(npc);
                 });
                 dom.dialogueChoices.appendChild(btn);
             });
@@ -134,6 +148,66 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         showNode(node);
+    }
+
+    function generateTradeItems() {
+        const items = [];
+        for (let i = 0; i < 3; i++) {
+            let upg;
+            if (Math.random() < 0.5) upg = generateProceduralUpgrade();
+            else upg = weaponUpgradePool[Math.floor(Math.random()*weaponUpgradePool.length)];
+            const rarity = upg.rarity || 'rare';
+            const cost = {common:50,uncommon:80,rare:150,epic:300}[rarity] || 100;
+            items.push({ ...upg, cost });
+        }
+        return items;
+    }
+
+    function openTrade() {
+        dom.tradeItems.innerHTML = '';
+        dom.creditCount.textContent = state.credits;
+        generateTradeItems().forEach(upg => {
+            const div = document.createElement('div');
+            div.className = 'trade-item';
+            const span = document.createElement('span');
+            span.textContent = `${upg.name} - ${upg.cost}c`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Buy';
+            btn.addEventListener('click', () => {
+                if (state.credits >= upg.cost) {
+                    upg.apply(state.player);
+                    state.credits -= upg.cost;
+                    dom.creditCount.textContent = state.credits;
+                    updateQuestLog();
+                    btn.disabled = true;
+                }
+            });
+            div.append(span, btn);
+            dom.tradeItems.appendChild(div);
+        });
+        dom.tradeOverlay.classList.remove('hidden');
+        dom.tradeOverlay.classList.add('visible');
+    }
+
+    function closeTrade() {
+        dom.tradeOverlay.classList.add('hidden');
+        dom.tradeOverlay.classList.remove('visible');
+    }
+
+    function offerMission(npc) {
+        const m = generateMission(npc.faction || FACTIONS.NEUTRAL);
+        state.missions.push(m);
+        updateQuestLog();
+    }
+
+    function updateQuestLog() {
+        dom.creditHud.textContent = state.credits;
+        dom.questList.innerHTML = '';
+        state.missions.forEach(m => {
+            const li = document.createElement('li');
+            li.textContent = (m.completed ? '[Done] ' : '') + m.description;
+            dom.questList.appendChild(li);
+        });
     }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
@@ -258,6 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.onDeath();
                 state.enemies = state.enemies.filter(e => e !== this);
                 state.score += this.xpValue * 10;
+                state.credits += this.xpValue * 2;
                 createExplosion(this.x, this.y, this.color, this.radius);
                 state.xpOrbs.push(new XpOrb(this.x, this.y, this.xpValue));
             }
@@ -782,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activateRegion(region);
             updateMusic(region);
         }
-        state.mission = generateMission();
+        state.missions.push(generateMission(FACTIONS.NEUTRAL));
         nextWave();
         dom.classMenu.classList.add('hidden');
         updateDiplomacyUI();
@@ -849,7 +924,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.enemies.push(enemy);
         }
         if (Math.random() < 0.3) {
-            const npcCfg = CONFIG.ENEMY.NEUTRAL_TRADER;
+            let npcCfg = CONFIG.ENEMY.NEUTRAL_TRADER;
+            if (region.faction === FACTIONS.SAMA && Math.random() < 0.5) npcCfg = CONFIG.ENEMY.SAMA_AGENT;
+            else if (region.faction === FACTIONS.PIRATE && Math.random() < 0.5) npcCfg = CONFIG.ENEMY.PIRATE_BROKER;
             const x = region.x + Math.random() * region.width;
             const y = region.y + Math.random() * region.height;
             const npc = Enemy.create(npcCfg, x, y);
@@ -962,21 +1039,24 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (poi.type === POI_TYPES.TECH_DROP) {
             state.player.addXp(50);
         } else if (poi.type === POI_TYPES.MISSION_DATA) {
-            if (state.mission && !state.mission.completed && state.mission.poi === poi) {
-                state.mission.completed = true;
-                state.score += 200;
-            }
+            state.missions.forEach(m => {
+                if (!m.completed && m.poi === poi) {
+                    m.completed = true;
+                    state.score += 200;
+                    adjustFactionRelation(m.faction, FACTIONS.NEUTRAL, 10);
+                }
+            });
         }
         poi.collected = true;
         if (region) region.pois = region.pois.filter(p => p !== poi);
     }
 
-    function generateMission() {
+    function generateMission(faction) {
         const region = CONFIG.MAP.REGIONS[Math.floor(Math.random()*CONFIG.MAP.REGIONS.length)];
         const poi = { type: POI_TYPES.MISSION_DATA, x: region.x + Math.random()*region.width, y: region.y + Math.random()*region.height, collected: false, radius: 10 };
         region.pois.push(poi);
-        const description = `Recover mission data at ${region.name}. Check your map for the marker.`;
-        return { type: 'DATA', region, poi, description, completed: false };
+        const description = `Recover data for ${faction} at ${region.name}.`;
+        return { faction, region, poi, description, completed: false };
     }
 
     let spatialGrid;
@@ -1167,9 +1247,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         dom.waveCounter.textContent = state.wave;
         dom.scoreCounter.textContent = state.score;
-        if (state.mission) {
-            dom.missionInfo.textContent = state.mission.completed ? 'Mission Complete' : state.mission.description;
-        }
+        const activeMission = state.missions.find(m => !m.completed);
+        dom.missionInfo.textContent = activeMission ? activeMission.description : 'No mission';
+        dom.creditHud.textContent = state.credits;
         // HP/XP bars: avoid division by zero
         dom.hpValue.textContent = `${Math.ceil(state.player.hp)}/${Math.ceil(state.player.maxHp)}`;
         dom.hpBar.style.width = state.player.maxHp > 0 ? `${Math.max(0, Math.min(1, state.player.hp / state.player.maxHp)) * 100}%` : '0%';
@@ -1187,6 +1267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         drawMiniMap();
         if (state.showMap) drawFullMap();
+        if (dom.questOverlay.classList.contains('visible')) updateQuestLog();
     }
 
     function gameLoop(timestamp) {
@@ -1299,12 +1380,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
             else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
             else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
-            else if (poi === state.mission?.poi && !state.mission.completed) mCtx.fillStyle = '#ffff00';
+            else if (state.missions.some(m => m.poi === poi && !m.completed)) mCtx.fillStyle = '#ffff00';
             else mCtx.fillStyle = '#ffff00';
             mCtx.beginPath();
-            mCtx.arc(px, py, poi === state.mission?.poi && !state.mission.completed ? 3 : 2, 0, Math.PI*2);
+            mCtx.arc(px, py, state.missions.some(m => m.poi === poi && !m.completed) ? 3 : 2, 0, Math.PI*2);
             mCtx.fill();
-            if (poi === state.mission?.poi && !state.mission.completed) {
+            if (state.missions.some(m => m.poi === poi && !m.completed)) {
                 mCtx.strokeStyle = '#ffffff';
                 mCtx.lineWidth = 1;
                 mCtx.stroke();
@@ -1346,12 +1427,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
             else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
             else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
-            else if (poi === state.mission?.poi && !state.mission.completed) mCtx.fillStyle = '#ffff00';
+            else if (state.missions.some(m => m.poi === poi && !m.completed)) mCtx.fillStyle = '#ffff00';
             else mCtx.fillStyle = '#ffff00';
             mCtx.beginPath();
-            mCtx.arc(poi.x*scaleX, poi.y*scaleY, poi === state.mission?.poi && !state.mission.completed ? 4 : 3, 0, Math.PI*2);
+            mCtx.arc(poi.x*scaleX, poi.y*scaleY, state.missions.some(m => m.poi === poi && !m.completed) ? 4 : 3, 0, Math.PI*2);
             mCtx.fill();
-            if (poi === state.mission?.poi && !state.mission.completed) {
+            if (state.missions.some(m => m.poi === poi && !m.completed)) {
                 mCtx.strokeStyle = '#ffffff';
                 mCtx.lineWidth = 1;
                 mCtx.stroke();
@@ -1364,8 +1445,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function drawMissionPointer() {
-        if (!state.mission || state.mission.completed) return;
-        const poi = state.mission.poi;
+        const m = state.missions.find(ms => !ms.completed);
+        if (!m) return;
+        const poi = m.poi;
         if (!poi) return;
         const x = poi.x - state.camera.x;
         const y = poi.y - state.camera.y;
@@ -1413,6 +1495,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     dom.diplomacyOverlay.classList.toggle('hidden', !visible);
                     if (visible) updateDiplomacyUI();
                 }
+                if (e.key.toLowerCase() === 'j') {
+                    const visible = dom.questOverlay.classList.toggle('visible');
+                    dom.questOverlay.classList.toggle('hidden', !visible);
+                    if (visible) updateQuestLog();
+                }
                 if (e.key.toLowerCase() === 'p') {
                     state.autoFire = !state.autoFire;
                 }
@@ -1428,6 +1515,11 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.closeDiplomacy.addEventListener('click', () => {
             dom.diplomacyOverlay.classList.add('hidden');
             dom.diplomacyOverlay.classList.remove('visible');
+        });
+        dom.closeTrade.addEventListener('click', closeTrade);
+        dom.closeQuests.addEventListener('click', () => {
+            dom.questOverlay.classList.add('hidden');
+            dom.questOverlay.classList.remove('visible');
         });
         state = getInitialState();
         updateDiplomacyUI();

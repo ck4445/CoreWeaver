@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function adjustFactionRelation(f1, f2, amount) {
         if (!state.factionRelations[f1] || !state.factionRelations[f2]) return;
         state.factionRelations[f1][f2] = Math.max(-100, Math.min(100, state.factionRelations[f1][f2] + amount));
-        state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] - amount));
+        state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] + amount));
         if (state.factionRelations[f1][f2] <= -60) state.hostileFactions.add(f1);
         if (state.factionRelations[f1][f2] > -30) state.hostileFactions.delete(f1);
         updateDiplomacyUI();
@@ -365,7 +365,16 @@ document.addEventListener('DOMContentLoaded', () => {
             createExplosion(this.x, this.y, '#e63946', 10); if (this.hp <= 0) { this.hp = 0; setGameState('GAME_OVER'); }
         }
         addXp(amount) {
-            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; state.levelUpRegion = getRegionFor(this.x, this.y); setGameState('LEVEL_UP'); }
+            const bonus = (this.passives && this.passives.techXpBonus) ? 1 + this.passives.techXpBonus : 1;
+            this.xp += amount * bonus;
+            if (this.xp >= this.xpToNextLevel) {
+                this.xp -= this.xpToNextLevel;
+                this.level++;
+                this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER);
+                this.hp = this.maxHp;
+                state.levelUpRegion = getRegionFor(this.x, this.y);
+                setGameState('LEVEL_UP');
+            }
         }
     }
 
@@ -441,7 +450,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.onDeath();
                 state.enemies = state.enemies.filter(e => e !== this);
                 state.score += this.xpValue * 10;
-                state.credits += this.xpValue * 2;
+                let credits = this.xpValue * 2;
+                if (state.player && state.player.passives && state.player.passives.creditBonus) {
+                    credits += credits * state.player.passives.creditBonus;
+                }
+                state.credits += credits;
                 createExplosion(this.x, this.y, this.color, this.radius);
                 state.xpOrbs.push(new XpOrb(this.x, this.y, this.xpValue));
             }
@@ -461,18 +474,18 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            let target = this.findTarget(); // Prioritizes other factions
-            let firingTarget = null; // Separate target for firing decision
-            let movementTarget = null; // Separate target for movement decision
+            let target = null;
+            if (state.hostileFactions.has(this.faction)) {
+                target = state.player;
+            }
+            if (!target) target = this.findTarget();
 
-            if (this.isWave) {
-                // Wave enemies can target player for movement and firing if no other faction target
-                movementTarget = target || state.player;
-                firingTarget = target || state.player;
-            } else {
-                // Non-wave enemies only target other factions for movement and firing
-                movementTarget = target;
-                firingTarget = target;
+            let movementTarget = target;
+            let firingTarget = target;
+
+            if (this.isWave && !target) {
+                movementTarget = state.player;
+                firingTarget = state.player;
             }
 
             if (movementTarget) {
@@ -507,11 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
     class CloakerEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.cloaked = false; this.cloakTimer = Math.random() * config.CLOAK_DUR; }
         update(dt) {
-            super.update(dt);
             this.cloakTimer -= dt * (1000/CONFIG.TARGET_FPS);
             if (this.cloakTimer <= 0) {
                 if (this.cloaked) {
-                    // Uncloak behind player
                     const a = state.player.angle + Math.PI;
                     this.x = state.player.x + Math.cos(a) * 40;
                     this.y = state.player.y + Math.sin(a) * 40;
@@ -519,11 +530,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.cloaked = !this.cloaked;
                 this.cloakTimer = this.cloaked ? this.config.CLOAK_DUR : this.config.UNCLOAK_DUR;
             }
+
             if (this.cloaked) {
                 const dx = state.player.x - this.x; const dy = state.player.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy) || 1;
                 this.x += (dx/dist) * this.speed * 1.5 * dt;
                 this.y += (dy/dist) * this.speed * 1.5 * dt;
+            } else {
+                super.update(dt);
             }
         }
         draw() { ctx.globalAlpha = this.cloaked ? 0.3 : 1.0; super.draw(); ctx.globalAlpha = 1.0; }
@@ -562,9 +576,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.owner instanceof Player) {
                 isCrit = Math.random() < (this.owner.critChance || 0);
                 amount = amount * (this.owner.damageMultiplier || 1);
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                amount *= (1 + speed * CONFIG.PHYSICS.VELOCITY_DAMAGE_MODIFIER);
             }
-            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-            amount *= (1 + speed * CONFIG.PHYSICS.VELOCITY_DAMAGE_MODIFIER);
             if (isCrit && this.owner && this.owner.critDamage) { amount *= this.owner.critDamage; }
             if (isNaN(amount) || !isFinite(amount)) amount = this.damage || 1; // Security: fallback if NaN
             return { amount, isCrit, attacker: this.owner };
@@ -861,7 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
         if (player.weapons.length < maxWeapons && state.levelUpRegion && state.levelUpRegion.faction === FACTIONS.SAMA) {
             const sama = weaponUpgradePool.find(w => w.id === 'add_sama_pulse');
-            if (sama) weaponChoices.push(sama);
+            if (sama && !weaponChoices.some(w => w.id === 'add_sama_pulse')) weaponChoices.push(sama);
         }
         let weaponCount = 0;
         if (weaponChoices.length) {
@@ -869,7 +883,8 @@ document.addEventListener('DOMContentLoaded', () => {
             choices.push(first);
             weaponCount = 1;
         }
-        while (choices.length < 4) {
+        const choiceLimit = (player.passives && player.passives.extraUpgradeChoice) ? 5 : 4;
+        while (choices.length < choiceLimit) {
             let pick = null;
             if (weaponCount < 2 && Math.random() < 0.5 && weaponChoices.length > 0) {
                 const remaining = weaponChoices.filter(w => !choices.includes(w));
@@ -1637,7 +1652,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
             }
         });
-        window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
+        window.addEventListener('keyup', e => {
+            if(state) {
+                state.keys[e.key.toLowerCase()] = false;
+                if (e.code === 'Space' && state.hyperspaceActive) {
+                    state.hyperspaceActive = false;
+                    state.hyperspaceCharge = 0;
+                }
+            }
+        });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
         window.addEventListener('mousedown', e => {
             if (e.button === 1 && state) {

@@ -140,6 +140,10 @@ function populatePOIs(regions) {
             region.pois.push({ type: POI_TYPES.OUTPOST, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
         } else if (roll < 0.2) {
             region.pois.push({ type: POI_TYPES.BLACK_MARKET, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.25) {
+            region.pois.push({ type: POI_TYPES.TECH_DROP, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
+        } else if (roll < 0.3) {
+            region.pois.push({ type: POI_TYPES.MISSION_DATA, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, radius: 12 });
         }
     });
 }
@@ -158,17 +162,17 @@ const CONFIG = {
     HYPERSPACE: { CHARGE_TIME: 30000, SPEED_MULTIPLIER: 25 },
     ENEMY: {
         // All enemies now have a small amount of gravity and faction assignments
-        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#A0522D', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
-        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#FF4500', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE },
-        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#2E8B57', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE },
-        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#4682B4', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE },
-        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#DAA520', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5, FACTION: FACTIONS.PIRATE },
-        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#00CED1', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE }, // Graviton remains a super-source
-        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#8A2BE2', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE },
-        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#DB7093', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE },
-        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#D2691E', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
-        SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 12, XP: 12, COLOR: '#696969', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA },
-        SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#F4A460', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
+        CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#A0522D', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 300 },
+        SWARMER: { RADIUS: 6, HP: 8, SPEED: 1.5, DAMAGE: 5, XP: 5, COLOR: '#FF4500', BEHAVIOR: 'chase', GRAVITY: 1, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 250 },
+        TANK: { RADIUS: 18, HP: 120, SPEED: 0.6, DAMAGE: 25, XP: 30, COLOR: '#2E8B57', BEHAVIOR: 'chase', GRAVITY: 10, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 300 },
+        SHOOTER: { RADIUS: 11, HP: 25, SPEED: 0.7, DAMAGE: 10, XP: 15, COLOR: '#4682B4', BEHAVIOR: 'shoot', FIRE_RATE: 2500, PREF_DIST: 250, GRAVITY: 3, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 400 },
+        SPLITTER: { RADIUS: 15, HP: 50, SPEED: 0.8, DAMAGE: 20, XP: 20, COLOR: '#DAA520', BEHAVIOR: 'split', SPLIT_COUNT: 3, GRAVITY: 5, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 300 },
+        GRAVITON: { RADIUS: 16, HP: 100, SPEED: 0.5, DAMAGE: 10, XP: 25, COLOR: '#00CED1', BEHAVIOR: 'graviton', GRAVITY: 200, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 350 }, // Graviton remains a super-source
+        CLOAKER: { RADIUS: 9, HP: 25, SPEED: 1.2, DAMAGE: 12, XP: 18, COLOR: '#8A2BE2', BEHAVIOR: 'cloak', CLOAK_DUR: 3000, UNCLOAK_DUR: 2000, GRAVITY: 1, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 300 },
+        HEALER: { RADIUS: 10, HP: 40, SPEED: 0.9, DAMAGE: 5, XP: 20, COLOR: '#DB7093', BEHAVIOR: 'heal', HEAL_RATE: 1000, HEAL_AMOUNT: 5, HEAL_RADIUS: 150, GRAVITY: 2, FACTION: FACTIONS.PIRATE, AGGRO_RANGE: 300 },
+        SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#D2691E', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA, AGGRO_RANGE: 300 },
+        SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 12, XP: 12, COLOR: '#696969', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA, AGGRO_RANGE: 350 },
+        SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#F4A460', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA, AGGRO_RANGE: 450 },
         NEUTRAL_TRADER: { RADIUS: 10, HP: 40, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#cccccc', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true,
             DIALOGUE: [
                 { id: 'start', text: 'Greetings traveler. Interested in some goods or work?', choices: ['Trade', 'Job', 'Leave'], next: ['trade', 'mission', 'end'] },

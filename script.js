@@ -55,7 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
-            autoFire: false, events: [], eventTimer: 10000, mission: null, speedBoost: 1
+            autoFire: false, events: [], eventTimer: 10000, mission: null, speedBoost: 1,
+            hostileFactions: new Set(),
         };
     }
 
@@ -120,10 +121,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
-            let target = this.findTarget(); // findTarget prioritizes other factions
-
-            if (this.isWave && !target) { // Wave enemies can target player if no other faction target
+            let target = null;
+            if (state.hostileFactions.has(this.faction)) {
                 target = state.player;
+            } else {
+                target = this.findTarget();
+                if (this.isWave && !target) target = state.player;
             }
 
             if (target) { // Covers both wave and non-wave if a valid target is found
@@ -168,6 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
         takeDamage(damageInfo) {
             this.hp -= damageInfo.amount;
             if (damageInfo.isCrit) createCritIndicator(this.x, this.y, damageInfo.amount);
+            if (damageInfo.attacker instanceof Player) {
+                state.hostileFactions.add(this.faction);
+            }
             if (this.hp <= 0) {
                 this.onDeath();
                 state.enemies = state.enemies.filter(e => e !== this);
@@ -297,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
             amount *= (1 + speed * CONFIG.PHYSICS.VELOCITY_DAMAGE_MODIFIER);
             if (isCrit && this.owner && this.owner.critDamage) { amount *= this.owner.critDamage; }
             if (isNaN(amount) || !isFinite(amount)) amount = this.damage || 1; // Security: fallback if NaN
-            return { amount, isCrit };
+            return { amount, isCrit, attacker: this.owner };
         }
         destroy() { state.projectiles = state.projectiles.filter(p => p !== this); }
     }
@@ -305,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor(x, y, angle, config, owner) {
             super(x, y, angle !== undefined ? angle : 0, config, owner || null);
         }
-        getDamage() { return { amount: this.damage, isCrit: false }; }
+        getDamage() { return { amount: this.damage, isCrit: false, attacker: this.owner }; }
     }
     class XpOrb extends Entity {
         constructor(x, y, value) { super(x, y, 4); this.value = value; this.friction = 0.95; this.age = 0; this.lifespan = 10000; }
@@ -636,7 +642,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function startGame() {
         if (!musicStarted) { bgMusic.play().catch(e => console.log("Audio couldn't play:", e)); musicStarted = true; }
         const keys = state ? state.keys : {}; const mouse = state ? state.mouse : { x: 0, y: 0 };
-        state = getInitialState(); state.keys = keys; state.mouse = mouse;
+        state = getInitialState();
+        state.keys = keys;
+        state.mouse = mouse;
         state.player = new Player(state.map.WIDTH / 2, state.map.HEIGHT / 2);
         state.camera.x = state.player.x - canvas.width / 2;
         state.camera.y = state.player.y - canvas.height / 2;
@@ -839,13 +847,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (e1 instanceof Projectile && e2 instanceof Enemy) handleProjectileEnemy(e1, e2);
                 else if (e2 instanceof Projectile && e1 instanceof Enemy) handleProjectileEnemy(e2, e1);
                 else if (e1 instanceof Enemy && e2 instanceof Enemy && e1.faction !== e2.faction) {
-                    e1.takeDamage({amount: e2.damage, isCrit: false});
-                    e2.takeDamage({amount: e1.damage, isCrit: false});
+                    e1.takeDamage({amount: e2.damage, isCrit: false, attacker: e2});
+                    e2.takeDamage({amount: e1.damage, isCrit: false, attacker: e1});
                 }
                 else if (e1 instanceof Player && e2 instanceof EnemyProjectile) e1.takeDamage(e2.getDamage().amount);
                 else if (e2 instanceof Player && e1 instanceof EnemyProjectile) e2.takeDamage(e1.getDamage().amount);
-                else if (e1 instanceof Drone && e2 instanceof Enemy) { e2.takeDamage({amount: e1.config.DRONE_DMG, isCrit: false}); e1.takeDamage(); }
-                else if (e2 instanceof Drone && e1 instanceof Enemy) { e1.takeDamage({amount: e2.config.DRONE_DMG, isCrit: false}); e2.takeDamage(); }
+                else if (e1 instanceof Drone && e2 instanceof Enemy) { e2.takeDamage({amount: e1.config.DRONE_DMG, isCrit: false, attacker: e1}); e1.takeDamage(); }
+                else if (e2 instanceof Drone && e1 instanceof Enemy) { e1.takeDamage({amount: e2.config.DRONE_DMG, isCrit: false, attacker: e2}); e2.takeDamage(); }
             }
         };
         const handleProjectileEnemy = (p, e) => {

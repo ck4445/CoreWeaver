@@ -47,6 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let state, musicStarted = false;
     const MINIMAP_VIEW = 30000;
     let mapZoom = 0.25;
+    const FACTION_UNIT_POOLS = {
+        [FACTIONS.PIRATE]: [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER, CONFIG.ENEMY.SHOOTER],
+        [FACTIONS.SAMA]: [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER],
+    };
 
     function generateBackground(width, height) {
         const stars = [];
@@ -82,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
             hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
             autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
-            newsFeed: [],
+            newsFeed: [], activeInvasions: [],
             hostileFactions: new Set(),
             factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
             skillTree: loadSkillTree(),
@@ -93,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function adjustFactionRelation(f1, f2, amount) {
         if (!state.factionRelations[f1] || !state.factionRelations[f2]) return;
         state.factionRelations[f1][f2] = Math.max(-100, Math.min(100, state.factionRelations[f1][f2] + amount));
-        state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] - amount));
+        state.factionRelations[f2][f1] = Math.max(-100, Math.min(100, state.factionRelations[f2][f1] + amount));
         if (state.factionRelations[f1][f2] <= -60) state.hostileFactions.add(f1);
         if (state.factionRelations[f1][f2] > -30) state.hostileFactions.delete(f1);
         updateDiplomacyUI();
@@ -143,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.textContent = choice;
                 btn.addEventListener('click', () => {
                     const nextKey = n.next[idx];
-                    const next = npc.dialogue[nextKey];
+                    const next = npc.dialogue.find(node => node.id === nextKey);
                     if (next && !next.action) { showNode(next); return; }
                     dom.dialogueOverlay.classList.add('hidden');
                     if (next && next.action === 'openTrade') openTrade(npc);
@@ -365,7 +369,16 @@ document.addEventListener('DOMContentLoaded', () => {
             createExplosion(this.x, this.y, '#e63946', 10); if (this.hp <= 0) { this.hp = 0; setGameState('GAME_OVER'); }
         }
         addXp(amount) {
-            this.xp += amount; if (this.xp >= this.xpToNextLevel) { this.xp -= this.xpToNextLevel; this.level++; this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER); this.hp = this.maxHp; state.levelUpRegion = getRegionFor(this.x, this.y); setGameState('LEVEL_UP'); }
+            const bonus = (this.passives && this.passives.techXpBonus) ? 1 + this.passives.techXpBonus : 1;
+            this.xp += amount * bonus;
+            if (this.xp >= this.xpToNextLevel) {
+                this.xp -= this.xpToNextLevel;
+                this.level++;
+                this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER);
+                this.hp = this.maxHp;
+                state.levelUpRegion = getRegionFor(this.x, this.y);
+                setGameState('LEVEL_UP');
+            }
         }
     }
 
@@ -382,13 +395,14 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
-            if (this.friendly) return;
             let target = null;
-            if (state.hostileFactions.has(this.faction)) {
-                target = state.player;
-            } else {
-                target = this.findTarget();
-                if (this.isWave && !target) target = state.player;
+            if (!this.friendly) {
+                if (state.hostileFactions.has(this.faction)) {
+                    target = state.player;
+                } else {
+                    target = this.findTarget();
+                    if (this.isWave && !target) target = state.player;
+                }
             }
 
             if (target) { // Covers both wave and non-wave if a valid target is found
@@ -404,11 +418,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         findTarget() {
-            let best = null; let bestDistSq = Infinity;
+            const range = this.config.AGGRO_RANGE || 300;
+            let best = null;
+            let bestDistSq = range * range;
             for (const e of state.enemies) {
                 if (e === this || e.faction === this.faction) continue;
-                const dx = e.x - this.x; const dy = e.y - this.y; const distSq = dx * dx + dy * dy;
-                if (distSq < bestDistSq && distSq < 90000) { best = e; bestDistSq = distSq; }
+                const dx = e.x - this.x;
+                const dy = e.y - this.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < bestDistSq) {
+                    best = e;
+                    bestDistSq = distSq;
+                }
             }
             return best;
         }
@@ -441,7 +462,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.onDeath();
                 state.enemies = state.enemies.filter(e => e !== this);
                 state.score += this.xpValue * 10;
-                state.credits += this.xpValue * 2;
+                let credits = this.xpValue * 2;
+                if (state.player && state.player.passives && state.player.passives.creditBonus) {
+                    credits += credits * state.player.passives.creditBonus;
+                }
+                state.credits += credits;
                 createExplosion(this.x, this.y, this.color, this.radius);
                 state.xpOrbs.push(new XpOrb(this.x, this.y, this.xpValue));
             }
@@ -461,22 +486,17 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
-            let target = this.findTarget(); // Prioritizes other factions
-            let firingTarget = null; // Separate target for firing decision
-            let movementTarget = null; // Separate target for movement decision
-
-            if (this.isWave) {
-                // Wave enemies can target player for movement and firing if no other faction target
-                movementTarget = target || state.player;
-                firingTarget = target || state.player;
-            } else {
-                // Non-wave enemies only target other factions for movement and firing
-                movementTarget = target;
-                firingTarget = target;
+            let target = null;
+            if (state.hostileFactions.has(this.faction)) {
+                target = state.player;
             }
+            if (!target) target = this.findTarget();
+            if (this.isWave && !target) target = state.player;
 
-            if (movementTarget) {
-                const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
+            let firingTarget = target;
+
+            if (target) {
+                const dx = target.x - this.x; const dy = target.y - this.y;
                 const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
                 if (dist > prefer) {
                     const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
@@ -486,10 +506,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.x -= (dx / dist) * spd * dt; this.y -= (dy / dist) * spd * dt;
                 }
             } else { // No movement target (either non-wave with no faction target, or wave with no target at all)
-                this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
-                if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
-                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
-                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
+                super.update(dt);
+                firingTarget = null;
             }
 
             this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS);
@@ -507,11 +525,9 @@ document.addEventListener('DOMContentLoaded', () => {
     class CloakerEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.cloaked = false; this.cloakTimer = Math.random() * config.CLOAK_DUR; }
         update(dt) {
-            super.update(dt);
             this.cloakTimer -= dt * (1000/CONFIG.TARGET_FPS);
             if (this.cloakTimer <= 0) {
                 if (this.cloaked) {
-                    // Uncloak behind player
                     const a = state.player.angle + Math.PI;
                     this.x = state.player.x + Math.cos(a) * 40;
                     this.y = state.player.y + Math.sin(a) * 40;
@@ -519,11 +535,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.cloaked = !this.cloaked;
                 this.cloakTimer = this.cloaked ? this.config.CLOAK_DUR : this.config.UNCLOAK_DUR;
             }
+
             if (this.cloaked) {
                 const dx = state.player.x - this.x; const dy = state.player.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy) || 1;
                 this.x += (dx/dist) * this.speed * 1.5 * dt;
                 this.y += (dy/dist) * this.speed * 1.5 * dt;
+            } else {
+                super.update(dt);
             }
         }
         draw() { ctx.globalAlpha = this.cloaked ? 0.3 : 1.0; super.draw(); ctx.globalAlpha = 1.0; }
@@ -562,9 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.owner instanceof Player) {
                 isCrit = Math.random() < (this.owner.critChance || 0);
                 amount = amount * (this.owner.damageMultiplier || 1);
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                amount *= (1 + speed * CONFIG.PHYSICS.VELOCITY_DAMAGE_MODIFIER);
             }
-            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-            amount *= (1 + speed * CONFIG.PHYSICS.VELOCITY_DAMAGE_MODIFIER);
             if (isCrit && this.owner && this.owner.critDamage) { amount *= this.owner.critDamage; }
             if (isNaN(amount) || !isFinite(amount)) amount = this.damage || 1; // Security: fallback if NaN
             return { amount, isCrit, attacker: this.owner };
@@ -697,9 +716,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     class Mine extends Projectile {
         constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.vx = 0; this.vy = 0; this.lifespan = 10000; this.armed = false; this.armTimer = this.config.ARM_TIME; }
-        update(dt) { if (!this.armed) { this.armTimer -= dt * (1000/CONFIG.TARGET_FPS); if (this.armTimer <= 0) this.armed = true; } if (this.armed) { for (const enemy of state.enemies) { if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS * (this.owner ? this.owner.areaMultiplier : 1))**2) { this.explode(); break; } } } super.update(dt); }
+        update(dt) {
+            if (!this.armed) {
+                this.armTimer -= dt * (1000/CONFIG.TARGET_FPS);
+                if (this.armTimer <= 0) this.armed = true;
+            }
+            if (this.armed) {
+                for (const enemy of state.enemies) {
+                    if (enemy === this.owner) continue;
+                    const ownerFaction = this.owner ? this.owner.faction : null;
+                    const relation = ownerFaction && state.factionRelations[ownerFaction] ? state.factionRelations[ownerFaction][enemy.faction] : -100;
+                    if (ownerFaction && relation > -30) continue;
+                    if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS * (this.owner ? this.owner.areaMultiplier : 1))**2) { this.explode(); break; }
+                }
+            }
+            super.update(dt);
+        }
         draw() { ctx.fillStyle = this.armed ? this.color : '#aaa'; ctx.beginPath(); ctx.rect(this.x-this.radius, this.y-this.radius, this.radius*2, this.radius*2); ctx.fill(); }
-        explode() { createExplosion(this.x, this.y, this.color, this.config.BLAST_RADIUS/2); for (const enemy of state.enemies) { if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS*(this.owner ? this.owner.areaMultiplier : 1))**2) { enemy.takeDamage(this.getDamage()); } } this.destroy(); }
+        explode() {
+            createExplosion(this.x, this.y, this.color, this.config.BLAST_RADIUS/2);
+            for (const enemy of state.enemies) {
+                if (enemy === this.owner) continue;
+                const ownerFaction = this.owner ? this.owner.faction : null;
+                const relation = ownerFaction && state.factionRelations[ownerFaction] ? state.factionRelations[ownerFaction][enemy.faction] : -100;
+                if (ownerFaction && relation > -30) continue;
+                if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS*(this.owner ? this.owner.areaMultiplier : 1))**2) {
+                    enemy.takeDamage(this.getDamage());
+                }
+            }
+            this.destroy();
+        }
     }
     class MineLayer extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.MINE }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Mine(this.owner.x, this.owner.y, 0, this.config, this.owner)); } }
     class KineticSlash extends Projectile {
@@ -761,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, null);
             if (nearestEnemy) {
                 const p = new ChainLightningProjectile(nearestEnemy.x, nearestEnemy.y, 0, this.config, this.owner);
+                state.projectiles.push(p);
                 createBeamParticle(this.owner.x, this.owner.y, nearestEnemy.x, nearestEnemy.y, this.config.COLOR);
                 nearestEnemy.takeDamage(p.getDamage());
                 p.onHit(nearestEnemy);
@@ -861,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const weaponChoices = player.weapons.length < maxWeapons ? weaponUpgradePool.slice() : [];
         if (player.weapons.length < maxWeapons && state.levelUpRegion && state.levelUpRegion.faction === FACTIONS.SAMA) {
             const sama = weaponUpgradePool.find(w => w.id === 'add_sama_pulse');
-            if (sama) weaponChoices.push(sama);
+            if (sama && !weaponChoices.some(w => w.id === 'add_sama_pulse')) weaponChoices.push(sama);
         }
         let weaponCount = 0;
         if (weaponChoices.length) {
@@ -869,7 +916,8 @@ document.addEventListener('DOMContentLoaded', () => {
             choices.push(first);
             weaponCount = 1;
         }
-        while (choices.length < 4) {
+        const choiceLimit = (player.passives && player.passives.extraUpgradeChoice) ? 5 : 4;
+        while (choices.length < choiceLimit) {
             let pick = null;
             if (weaponCount < 2 && Math.random() < 0.5 && weaponChoices.length > 0) {
                 const remaining = weaponChoices.filter(w => !choices.includes(w));
@@ -928,7 +976,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'START': dom.startMenu.classList.remove('hidden'); break;
             case 'PLAYING': resumeGame(); break;
             case 'LEVEL_UP': pauseGame(); displayUpgradeChoices(); dom.levelUpMenu.classList.remove('hidden'); break;
-            case 'GAME_OVER': pauseGame(); dom.finalScore.textContent = state.score; dom.finalWave.textContent = state.wave; dom.gameOverMenu.classList.remove('hidden'); saveSkillTree(state.skillTree); break;
+            case 'GAME_OVER':
+                pauseGame();
+                bgMusic.pause();
+                dom.finalScore.textContent = state.score;
+                dom.finalWave.textContent = state.wave;
+                dom.gameOverMenu.classList.remove('hidden');
+                saveSkillTree(state.skillTree);
+                break;
         }
     }
     function startGame() {
@@ -1145,16 +1200,65 @@ document.addEventListener('DOMContentLoaded', () => {
         while (targetRegion === attackerRegion) targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
         const attacker = attackerRegion.faction;
         const defender = targetRegion.faction;
-        const winner = Math.random() < 0.5 ? attacker : defender;
-        targetRegion.faction = winner;
-        const msg = `[${winner}] captured ${targetRegion.name}`;
-        state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[winner]});
+        const invasion = {
+            attacker,
+            defender,
+            region: targetRegion,
+            attackers: [],
+            defenders: [],
+        };
+        const pickUnit = faction => {
+            const pool = FACTION_UNIT_POOLS[faction] || [CONFIG.ENEMY.CHASER];
+            return pool[Math.floor(Math.random()*pool.length)];
+        };
+        for (let i = 0; i < 4; i++) {
+            const ax = targetRegion.x + Math.random()*targetRegion.width;
+            const ay = targetRegion.y + Math.random()*targetRegion.height;
+            const enemyA = Enemy.create(pickUnit(attacker), ax, ay);
+            enemyA.faction = attacker;
+            enemyA.active = true;
+            enemyA.invasion = invasion;
+            enemyA.side = 'attackers';
+            enemyA.onDeath = function() { invasion.attackers = invasion.attackers.filter(e => e !== this); };
+            invasion.attackers.push(enemyA);
+            state.enemies.push(enemyA);
+            const dx = targetRegion.x + Math.random()*targetRegion.width;
+            const dy = targetRegion.y + Math.random()*targetRegion.height;
+            const enemyD = Enemy.create(pickUnit(defender), dx, dy);
+            enemyD.faction = defender;
+            enemyD.active = true;
+            enemyD.invasion = invasion;
+            enemyD.side = 'defenders';
+            enemyD.onDeath = function() { invasion.defenders = invasion.defenders.filter(e => e !== this); };
+            invasion.defenders.push(enemyD);
+            state.enemies.push(enemyD);
+        }
+        targetRegion.invasion = invasion;
+        state.activeInvasions.push(invasion);
+        const msg = `${attacker} forces have invaded ${targetRegion.name}!`;
+        state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[attacker]});
         dom.newsPopup.textContent = msg;
         dom.newsPopup.classList.remove('hidden');
         clearTimeout(newsPopupTimeout);
-        newsPopupTimeout = setTimeout(() => {
-            dom.newsPopup.classList.add('hidden');
-        }, 5000);
+        newsPopupTimeout = setTimeout(() => { dom.newsPopup.classList.add('hidden'); }, 5000);
+    }
+
+    function updateInvasions(dt) {
+        state.activeInvasions = state.activeInvasions.filter(inv => {
+            if (!inv.attackers.length || !inv.defenders.length) {
+                const winner = inv.defenders.length ? inv.defender : inv.attacker;
+                inv.region.faction = winner;
+                delete inv.region.invasion;
+                const msg = `[${winner}] captured ${inv.region.name}`;
+                state.newsFeed.push({timestamp: Date.now(), message: msg, color: FACTION_OUTLINE_COLORS[winner]});
+                dom.newsPopup.textContent = msg;
+                dom.newsPopup.classList.remove('hidden');
+                clearTimeout(newsPopupTimeout);
+                newsPopupTimeout = setTimeout(() => { dom.newsPopup.classList.add('hidden'); }, 5000);
+                return false;
+            }
+            return true;
+        });
     }
 
     function handlePoiCollision(poi) {
@@ -1226,7 +1330,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         const handleProjectileEnemy = (p, e) => {
-            if (p.owner === e || p instanceof EnemyProjectile) return;
+            if (p.owner === e) return;
+            if (p instanceof EnemyProjectile && p.owner && p.owner.faction === e.faction) return;
             if (p instanceof ForcePulseProjectile) { if (p.hitEnemies.has(e)) return; const angle = Math.atan2(e.y-p.owner.y, e.x-p.owner.x); e.vx += Math.cos(angle) * p.config.PUSH_FORCE / e.mass; e.vy += Math.sin(angle) * p.config.PUSH_FORCE / e.mass; p.hitEnemies.add(e); return; }
             if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
             if (p instanceof ChainLightningProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.onHit(e); return; }
@@ -1330,12 +1435,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.projectiles.forEach(p => p.update(dt));
         state.drones.forEach(d => d.update(dt));
         state.xpOrbs.forEach(o => o.update(dt));
+        updateInvasions(dt);
         handleCollisions();
         handleGravity(dt);
         state.particles = state.particles.filter(p => p.lifespan > 0);
         state.particles.forEach(p => p.update(dt));
         if (region && region.enemies && !region.cleared) {
-            if (region.enemies.every(e => e.hp <= 0)) region.cleared = true;
+            if (region.enemies.filter(e => !e.friendly).every(e => e.hp <= 0)) region.cleared = true;
         }
         const remainingWave = state.enemies.filter(e => e.isWave).length;
         if (remainingWave === 0 && state.gameState === 'PLAYING') nextWave();
@@ -1405,12 +1511,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.lastTime) state.lastTime = timestamp;
         let rawDeltaTime = timestamp - state.lastTime;
         state.lastTime = timestamp;
-        // Break up large dt steps
-        let steps = Math.floor(rawDeltaTime / (1000 / CONFIG.TARGET_FPS));
-        let remainder = rawDeltaTime % (1000 / CONFIG.TARGET_FPS);
-        let count = 0;
-        while (steps-- > 0 && count < 5) { update(1); count++; }
-        update(remainder / (1000 / CONFIG.TARGET_FPS));
+        const delta = Math.min(5, rawDeltaTime / (1000 / CONFIG.TARGET_FPS));
+        update(delta);
         draw();
         state.animationFrameId = requestAnimationFrame(gameLoop);
     }
@@ -1488,6 +1590,27 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
             drawRegionPath(mCtx, r.points, minX, minY, scaleX, scaleY);
             mCtx.fill();
+            if (r.invasion) {
+                mCtx.save();
+                mCtx.strokeStyle = '#ffff00';
+                mCtx.lineWidth = 2;
+                mCtx.shadowColor = '#ffff00';
+                mCtx.shadowBlur = 10 + 5*Math.sin(state.gameTime/200);
+                drawRegionPath(mCtx, r.points, minX, minY, scaleX, scaleY);
+                mCtx.stroke();
+                const ax = (r.cx - minX)*scaleX;
+                const ay = (r.cy - minY)*scaleY - 8;
+                const total = r.invasion.attackers.length + r.invasion.defenders.length;
+                const aRatio = total ? r.invasion.attackers.length / total : 0;
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.attacker];
+                mCtx.fillRect(ax-15, ay, 30*aRatio, 4);
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.defender];
+                mCtx.fillRect(ax-15+30*aRatio, ay, 30*(1-aRatio), 4);
+                mCtx.strokeStyle = '#000';
+                mCtx.lineWidth = 1;
+                mCtx.strokeRect(ax-15, ay, 30, 4);
+                mCtx.restore();
+            }
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '10px sans-serif';
@@ -1539,6 +1662,27 @@ document.addEventListener('DOMContentLoaded', () => {
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
             drawRegionPath(mCtx, r.points, 0, 0, scaleX, scaleY);
             mCtx.fill();
+            if (r.invasion) {
+                mCtx.save();
+                mCtx.strokeStyle = '#ffff00';
+                mCtx.lineWidth = 2;
+                mCtx.shadowColor = '#ffff00';
+                mCtx.shadowBlur = 15 + 5*Math.sin(state.gameTime/200);
+                drawRegionPath(mCtx, r.points, 0, 0, scaleX, scaleY);
+                mCtx.stroke();
+                const ax = r.cx*scaleX;
+                const ay = r.cy*scaleY - 12;
+                const total = r.invasion.attackers.length + r.invasion.defenders.length;
+                const aRatio = total ? r.invasion.attackers.length / total : 0;
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.attacker];
+                mCtx.fillRect(ax-20, ay, 40*aRatio, 6);
+                mCtx.fillStyle = FACTION_OUTLINE_COLORS[r.invasion.defender];
+                mCtx.fillRect(ax-20+40*aRatio, ay, 40*(1-aRatio), 6);
+                mCtx.strokeStyle = '#000';
+                mCtx.lineWidth = 1;
+                mCtx.strokeRect(ax-20, ay, 40, 6);
+                mCtx.restore();
+            }
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';
                 mCtx.font = '16px sans-serif';
@@ -1610,34 +1754,40 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; reCenterCamera(); });
         window.addEventListener('keydown', e => {
             if(state) {
-                state.keys[e.key.toLowerCase()] = true;
-                if (e.code === 'Space' && state.hyperspaceActive) {
-                    state.hyperspaceActive = false;
-                    state.hyperspaceCharge = 0;
-                }
-                if (e.key.toLowerCase() === 'm') {
+                const key = e.key.toLowerCase();
+                state.keys[key] = true;
+                if (key === 'm') {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);
                 }
-                if (e.key === 'Tab') {
+                if (key === 'tab') {
                     e.preventDefault();
                     const isVisible = !dom.diplomacyOverlay.classList.contains('visible');
                     dom.diplomacyOverlay.classList.toggle('visible', isVisible);
                     if (isVisible) updateDiplomacyUI();
                 }
-                if (e.key.toLowerCase() === 'j') {
+                if (key === 'j') {
                     const isVisible = !dom.questOverlay.classList.contains('visible');
                     dom.questOverlay.classList.toggle('visible', isVisible);
                     if (isVisible) updateQuestLog();
                 }
-                if (e.key.toLowerCase() === 'c') {
+                if (key === 'c') {
                     toggleControlPanel();
                 }
-                if (state.showMap && (e.key === '+' || e.key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
-                if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
+                if (state.showMap && (key === '+' || key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
+                if (state.showMap && (key === '-' || key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
             }
         });
-        window.addEventListener('keyup', e => { if(state) state.keys[e.key.toLowerCase()] = false; });
+        window.addEventListener('keyup', e => {
+            if(state) {
+                const key = e.key.toLowerCase();
+                state.keys[key] = false;
+                if (e.code === 'Space') {
+                    state.hyperspaceActive = false;
+                    state.hyperspaceCharge = 0;
+                }
+            }
+        });
         window.addEventListener('mousemove', e => { if(state) { state.mouse.x = e.clientX; state.mouse.y = e.clientY; } });
         window.addEventListener('mousedown', e => {
             if (e.button === 1 && state) {
@@ -1669,7 +1819,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (dom.newsPopup) dom.newsPopup.addEventListener('click', () => {
             openApp('news');
-            toggleControlPanel(false);
             dom.newsPopup.classList.add('hidden');
         });
         state = getInitialState();

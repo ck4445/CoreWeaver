@@ -35,6 +35,17 @@ html, body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(#ffffff 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity: 0.1;
+    pointer-events: none;
+    z-index: 0;
+}
+
 #gameCanvas {
     position: absolute;
     top: 0;
@@ -130,6 +141,24 @@ html, body {
 }
 .menu-card.hidden { display: none; }
 .menu-card h1 { font-size: 36px; color: var(--accent-color); margin-bottom: 20px; }
+.title-gradient {
+    background: linear-gradient(45deg, var(--accent-color), var(--epic-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.tagline {
+    margin-bottom: 15px;
+    font-style: italic;
+}
+.how-to {
+    text-align: left;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+.how-to li {
+    list-style: disc;
+    margin-left: 20px;
+}
 .menu-card h2 { font-size: 28px; color: var(--accent-color); margin-bottom: 15px; }
 .menu-card p { margin-bottom: 20px; line-height: 1.6; opacity: 0.9; }
 .menu-card p strong { color: var(--accent-color); font-weight: 600; }

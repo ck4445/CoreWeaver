@@ -124,7 +124,7 @@ const CONFIG = {
         GRAVITY_CONSTANT: 20, // Reduced further to minimize projectile attraction
         VELOCITY_DAMAGE_MODIFIER: 0.05,
     },
-    HYPERSPACE: { CHARGE_TIME: 30000, SPEED_MULTIPLIER: 8 },
+    HYPERSPACE: { CHARGE_TIME: 30000, SPEED_MULTIPLIER: 25 },
     ENEMY: {
         // All enemies now have a small amount of gravity and faction assignments
         CHASER: { RADIUS: 10, HP: 20, SPEED: 1.0, DAMAGE: 10, XP: 10, COLOR: '#A0522D', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.PIRATE },
@@ -159,7 +159,7 @@ const CONFIG = {
         MINE: { FIRE_RATE: 2000, DAMAGE: 40, RADIUS: 5, ARM_TIME: 1000, BLAST_RADIUS: 80, COLOR: '#e63946', GRAVITY: 5},
         BLADE: { FIRE_RATE: 700, DAMAGE: 35, RANGE: 50, ARC: Math.PI / 2, DURATION: 100, COLOR: '#a8dadc', GRAVITY: 0 }, // Slashes are instant, no gravity
         RAILGUN: { FIRE_RATE: 1800, DAMAGE: 50, SPEED: 25, RADIUS: 4, WIDTH: 200, COLOR: '#00b4d8', PENETRATION: 3, GRAVITY: 1 },
-        CHAIN_LIGHTNING: { FIRE_RATE: 1500, DAMAGE: 20, SPEED: 8, RADIUS: 3, COLOR: '#9d4edd', BOUNCES: 3, BOUNCE_RANGE: 150, GRAVITY: 0 }, // Instantaneous jumps
+        CHAIN_LIGHTNING: { FIRE_RATE: 1500, DAMAGE: 20, SPEED: 8, RADIUS: 3, COLOR: '#9d4edd', BOUNCES: 3, RANGE: 400, BOUNCE_RANGE: 120, GRAVITY: 0 }, // Instantaneous jumps
         BLACK_HOLE: { FIRE_RATE: 5000, DAMAGE: 100, SPEED: 2, RADIUS: 10, COLOR: '#3c096c', DURATION: 3000, GRAVITY: 350, EXPLOSION_RADIUS: 120 }, // Black hole remains the ultimate gravity source
         DRONE_FACTORY: { FIRE_RATE: 4000, DRONE_HP: 10, DRONE_DMG: 15, DRONE_SPD: 2.5, DRONE_RADIUS: 5, COLOR: '#ADFF2F', GRAVITY: 4 },
         FORCE_FIELD: { FIRE_RATE: 2500, RADIUS: 150, DURATION: 200, PUSH_FORCE: 25, COLOR: '#ade8f4', GRAVITY: 0 },

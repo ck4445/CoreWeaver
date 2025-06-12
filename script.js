@@ -478,13 +478,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     class ChainLightningWeapon extends Weapon {
-        constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.CHAIN_LIGHTNING }; this.fireRate = this.config.FIRE_RATE; }
+        constructor(owner) {
+            super(owner);
+            this.config = { ...CONFIG.WEAPONS.CHAIN_LIGHTNING };
+            this.fireRate = this.config.FIRE_RATE;
+        }
         fire() {
             if (!state.enemies.length) return;
-            const nearestEnemy = state.enemies.reduce((closest, enemy) => {
-                const dCurr = (enemy.x-this.owner.x)**2 + (enemy.y-this.owner.y)**2;
+            const rangeSq = (this.config.RANGE || 0) ** 2;
+            const inRange = state.enemies
+                .filter(e => (e.x - this.owner.x) ** 2 + (e.y - this.owner.y) ** 2 <= rangeSq);
+            if (!inRange.length) return;
+            const nearestEnemy = inRange.reduce((closest, enemy) => {
+                const dCurr = (enemy.x - this.owner.x) ** 2 + (enemy.y - this.owner.y) ** 2;
                 if (!closest) return enemy;
-                const dBest = (closest.x-this.owner.x)**2 + (closest.y-this.owner.y)**2;
+                const dBest = (closest.x - this.owner.x) ** 2 + (closest.y - this.owner.y) ** 2;
                 return dCurr < dBest ? enemy : closest;
             }, null);
             if (nearestEnemy) {

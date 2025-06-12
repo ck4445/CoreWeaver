@@ -13,6 +13,38 @@ const FACTION_OUTLINE_COLORS = {
     [FACTIONS.NEUTRAL]: '#cccccc', // neutral grey for others
 };
 
+// Starting relations between major factions
+const INITIAL_FACTION_RELATIONS = {
+    [FACTIONS.PIRATE]: { [FACTIONS.SAMA]: -50, [FACTIONS.NEUTRAL]: -20 },
+    [FACTIONS.SAMA]: { [FACTIONS.PIRATE]: -50, [FACTIONS.NEUTRAL]: 10 },
+    [FACTIONS.NEUTRAL]: { [FACTIONS.PIRATE]: -10, [FACTIONS.SAMA]: 10 },
+};
+
+// Player starting archetypes
+const PLAYER_CLASSES = {
+    ENGINEER: {
+        name: 'Engineer',
+        startingWeapons: ['DRONE_FACTORY'],
+        passives: { techXpBonus: 0.25 },
+    },
+    MERCENARY: {
+        name: 'Mercenary',
+        startingWeapons: ['CANNON'],
+        passives: { creditBonus: 0.2 },
+    },
+    SMUGGLER: {
+        name: 'Smuggler',
+        startingWeapons: ['SHARD'],
+        passives: { extraUpgradeChoice: true },
+    },
+};
+
+const BASE_SKILL_TREE = {
+    combat: { crit: 0, damage: 0 },
+    tech: { hyperspace: 0 },
+    utility: { reveal: 0 },
+};
+
 // Types of points of interest that can appear in regions
 const POI_TYPES = {
     DERELICT: 'Derelict Ship',
@@ -138,7 +170,12 @@ const CONFIG = {
         SAMA_TROOP: { RADIUS: 10, HP: 18, SPEED: 1.2, DAMAGE: 8, XP: 8, COLOR: '#D2691E', BEHAVIOR: 'wander', GRAVITY: 2, FACTION: FACTIONS.SAMA },
         SAMA_GUARD: { RADIUS: 12, HP: 30, SPEED: 1.0, DAMAGE: 12, XP: 12, COLOR: '#696969', BEHAVIOR: 'chase', GRAVITY: 2, FACTION: FACTIONS.SAMA },
         SAMA_SNIPER: { RADIUS: 9, HP: 20, SPEED: 0.8, DAMAGE: 15, XP: 15, COLOR: '#F4A460', BEHAVIOR: 'shoot', FIRE_RATE: 2200, PREF_DIST: 350, GRAVITY: 2, FACTION: FACTIONS.SAMA },
-        NEUTRAL_TRADER: { RADIUS: 10, HP: 40, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#cccccc', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true },
+        NEUTRAL_TRADER: { RADIUS: 10, HP: 40, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#cccccc', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true,
+            DIALOGUE: [
+                { id: 'start', text: 'Greetings traveler. Interested in some goods?', choices: ['Show me', 'Leave'], next: ['trade', 'end'] },
+                { id: 'trade', text: 'Sorry, shop is under construction.' },
+                { id: 'end', text: 'Safe travels.' }
+            ] },
     },
     MAP: {
         WIDTH: 367200,

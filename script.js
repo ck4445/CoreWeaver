@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.textContent = choice;
                 btn.addEventListener('click', () => {
                     const nextKey = n.next[idx];
-                    const next = npc.dialogue[nextKey];
+                    const next = npc.dialogue.find(node => node.id === nextKey);
                     if (next && !next.action) { showNode(next); return; }
                     dom.dialogueOverlay.classList.add('hidden');
                     if (next && next.action === 'openTrade') openTrade(npc);
@@ -391,13 +391,14 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isWave = false; // Added property to distinguish wave enemies
         }
         update(dt) {
-            if (this.friendly) return;
             let target = null;
-            if (state.hostileFactions.has(this.faction)) {
-                target = state.player;
-            } else {
-                target = this.findTarget();
-                if (this.isWave && !target) target = state.player;
+            if (!this.friendly) {
+                if (state.hostileFactions.has(this.faction)) {
+                    target = state.player;
+                } else {
+                    target = this.findTarget();
+                    if (this.isWave && !target) target = state.player;
+                }
             }
 
             if (target) { // Covers both wave and non-wave if a valid target is found
@@ -711,9 +712,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     class Mine extends Projectile {
         constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.vx = 0; this.vy = 0; this.lifespan = 10000; this.armed = false; this.armTimer = this.config.ARM_TIME; }
-        update(dt) { if (!this.armed) { this.armTimer -= dt * (1000/CONFIG.TARGET_FPS); if (this.armTimer <= 0) this.armed = true; } if (this.armed) { for (const enemy of state.enemies) { if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS * (this.owner ? this.owner.areaMultiplier : 1))**2) { this.explode(); break; } } } super.update(dt); }
+        update(dt) {
+            if (!this.armed) {
+                this.armTimer -= dt * (1000/CONFIG.TARGET_FPS);
+                if (this.armTimer <= 0) this.armed = true;
+            }
+            if (this.armed) {
+                for (const enemy of state.enemies) {
+                    if (enemy === this.owner) continue;
+                    const ownerFaction = this.owner ? this.owner.faction : null;
+                    const relation = ownerFaction && state.factionRelations[ownerFaction] ? state.factionRelations[ownerFaction][enemy.faction] : -100;
+                    if (ownerFaction && relation > -30) continue;
+                    if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS * (this.owner ? this.owner.areaMultiplier : 1))**2) { this.explode(); break; }
+                }
+            }
+            super.update(dt);
+        }
         draw() { ctx.fillStyle = this.armed ? this.color : '#aaa'; ctx.beginPath(); ctx.rect(this.x-this.radius, this.y-this.radius, this.radius*2, this.radius*2); ctx.fill(); }
-        explode() { createExplosion(this.x, this.y, this.color, this.config.BLAST_RADIUS/2); for (const enemy of state.enemies) { if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS*(this.owner ? this.owner.areaMultiplier : 1))**2) { enemy.takeDamage(this.getDamage()); } } this.destroy(); }
+        explode() {
+            createExplosion(this.x, this.y, this.color, this.config.BLAST_RADIUS/2);
+            for (const enemy of state.enemies) {
+                if (enemy === this.owner) continue;
+                const ownerFaction = this.owner ? this.owner.faction : null;
+                const relation = ownerFaction && state.factionRelations[ownerFaction] ? state.factionRelations[ownerFaction][enemy.faction] : -100;
+                if (ownerFaction && relation > -30) continue;
+                if ((enemy.x-this.x)**2+(enemy.y-this.y)**2 < (this.config.BLAST_RADIUS*(this.owner ? this.owner.areaMultiplier : 1))**2) {
+                    enemy.takeDamage(this.getDamage());
+                }
+            }
+            this.destroy();
+        }
     }
     class MineLayer extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.MINE }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Mine(this.owner.x, this.owner.y, 0, this.config, this.owner)); } }
     class KineticSlash extends Projectile {
@@ -775,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, null);
             if (nearestEnemy) {
                 const p = new ChainLightningProjectile(nearestEnemy.x, nearestEnemy.y, 0, this.config, this.owner);
+                state.projectiles.push(p);
                 createBeamParticle(this.owner.x, this.owner.y, nearestEnemy.x, nearestEnemy.y, this.config.COLOR);
                 nearestEnemy.takeDamage(p.getDamage());
                 p.onHit(nearestEnemy);
@@ -943,7 +972,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'START': dom.startMenu.classList.remove('hidden'); break;
             case 'PLAYING': resumeGame(); break;
             case 'LEVEL_UP': pauseGame(); displayUpgradeChoices(); dom.levelUpMenu.classList.remove('hidden'); break;
-            case 'GAME_OVER': pauseGame(); dom.finalScore.textContent = state.score; dom.finalWave.textContent = state.wave; dom.gameOverMenu.classList.remove('hidden'); saveSkillTree(state.skillTree); break;
+            case 'GAME_OVER':
+                pauseGame();
+                bgMusic.pause();
+                dom.finalScore.textContent = state.score;
+                dom.finalWave.textContent = state.wave;
+                dom.gameOverMenu.classList.remove('hidden');
+                saveSkillTree(state.skillTree);
+                break;
         }
     }
     function startGame() {
@@ -1286,7 +1322,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         const handleProjectileEnemy = (p, e) => {
-            if (p.owner === e || p instanceof EnemyProjectile) return;
+            if (p.owner === e) return;
+            if (p instanceof EnemyProjectile && p.owner && p.owner.faction === e.faction) return;
             if (p instanceof ForcePulseProjectile) { if (p.hitEnemies.has(e)) return; const angle = Math.atan2(e.y-p.owner.y, e.x-p.owner.x); e.vx += Math.cos(angle) * p.config.PUSH_FORCE / e.mass; e.vy += Math.sin(angle) * p.config.PUSH_FORCE / e.mass; p.hitEnemies.add(e); return; }
             if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
             if (p instanceof ChainLightningProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.onHit(e); return; }
@@ -1396,7 +1433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.particles = state.particles.filter(p => p.lifespan > 0);
         state.particles.forEach(p => p.update(dt));
         if (region && region.enemies && !region.cleared) {
-            if (region.enemies.every(e => e.hp <= 0)) region.cleared = true;
+            if (region.enemies.filter(e => !e.friendly).every(e => e.hp <= 0)) region.cleared = true;
         }
         const remainingWave = state.enemies.filter(e => e.isWave).length;
         if (remainingWave === 0 && state.gameState === 'PLAYING') nextWave();
@@ -1466,12 +1503,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.lastTime) state.lastTime = timestamp;
         let rawDeltaTime = timestamp - state.lastTime;
         state.lastTime = timestamp;
-        // Break up large dt steps
-        let steps = Math.floor(rawDeltaTime / (1000 / CONFIG.TARGET_FPS));
-        let remainder = rawDeltaTime % (1000 / CONFIG.TARGET_FPS);
-        let count = 0;
-        while (steps-- > 0 && count < 5) { update(1); count++; }
-        update(remainder / (1000 / CONFIG.TARGET_FPS));
+        const delta = Math.min(5, rawDeltaTime / (1000 / CONFIG.TARGET_FPS));
+        update(delta);
         draw();
         state.animationFrameId = requestAnimationFrame(gameLoop);
     }
@@ -1713,37 +1746,35 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; reCenterCamera(); });
         window.addEventListener('keydown', e => {
             if(state) {
-                state.keys[e.key.toLowerCase()] = true;
-                if (e.code === 'Space' && state.hyperspaceActive) {
-                    state.hyperspaceActive = false;
-                    state.hyperspaceCharge = 0;
-                }
-                if (e.key.toLowerCase() === 'm') {
+                const key = e.key.toLowerCase();
+                state.keys[key] = true;
+                if (key === 'm') {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);
                 }
-                if (e.key === 'Tab') {
+                if (key === 'tab') {
                     e.preventDefault();
                     const isVisible = !dom.diplomacyOverlay.classList.contains('visible');
                     dom.diplomacyOverlay.classList.toggle('visible', isVisible);
                     if (isVisible) updateDiplomacyUI();
                 }
-                if (e.key.toLowerCase() === 'j') {
+                if (key === 'j') {
                     const isVisible = !dom.questOverlay.classList.contains('visible');
                     dom.questOverlay.classList.toggle('visible', isVisible);
                     if (isVisible) updateQuestLog();
                 }
-                if (e.key.toLowerCase() === 'c') {
+                if (key === 'c') {
                     toggleControlPanel();
                 }
-                if (state.showMap && (e.key === '+' || e.key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
-                if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
+                if (state.showMap && (key === '+' || key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
+                if (state.showMap && (key === '-' || key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }
             }
         });
         window.addEventListener('keyup', e => {
             if(state) {
-                state.keys[e.key.toLowerCase()] = false;
-                if (e.code === 'Space' && state.hyperspaceActive) {
+                const key = e.key.toLowerCase();
+                state.keys[key] = false;
+                if (e.code === 'Space') {
                     state.hyperspaceActive = false;
                     state.hyperspaceCharge = 0;
                 }
@@ -1780,7 +1811,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (dom.newsPopup) dom.newsPopup.addEventListener('click', () => {
             openApp('news');
-            toggleControlPanel(false);
             dom.newsPopup.classList.add('hidden');
         });
         state = getInitialState();

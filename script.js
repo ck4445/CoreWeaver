@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dom = {
         hud: document.getElementById('game-hud'), waveCounter: document.getElementById('wave-counter'), scoreCounter: document.getElementById('score-counter'),
+        missionInfo: document.getElementById('mission-info'),
         hpBar: document.getElementById('hp-bar'), hpValue: document.getElementById('hp-value'), xpBar: document.getElementById('xp-bar'),
         hyperBar: document.getElementById('hyper-bar'), hyperValue: document.getElementById('hyper-value'),
         levelValue: document.getElementById('level-value'), overlay: document.getElementById('ui-overlay'), startMenu: document.getElementById('start-menu'),
@@ -53,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
             gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
-            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets
+            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
+            autoFire: false, events: [], eventTimer: 10000, mission: null, speedBoost: 1
         };
     }
 
@@ -74,10 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
         update(dt) {
             // Use all keys as lowercase for consistency
             if (state.hyperspaceActive) {
-                this.vx = Math.cos(this.angle) * this.speed * CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
-                this.vy = Math.sin(this.angle) * this.speed * CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
+                const spd = this.speed * (state.speedBoost || 1) * CONFIG.HYPERSPACE.SPEED_MULTIPLIER;
+                this.vx = Math.cos(this.angle) * spd;
+                this.vy = Math.sin(this.angle) * spd;
             } else {
-                if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * this.speed; this.vy += Math.sin(this.angle) * this.speed; createThrusterParticles(this); }
+                let spd = this.speed * (state.speedBoost || 1);
+                if (state.keys['w'] || state.keys['arrowup']) { this.vx += Math.cos(this.angle) * spd; this.vy += Math.sin(this.angle) * spd; createThrusterParticles(this); }
                 this.vx *= this.friction; this.vy *= this.friction;
                 const targetAngle = Math.atan2(state.mouse.y - (this.y - state.camera.y), state.mouse.x - (this.x - state.camera.x));
                 let angleDiff = targetAngle - this.angle;
@@ -235,7 +239,22 @@ document.addEventListener('DOMContentLoaded', () => {
         update(dt) {
             super.update(dt);
             this.cloakTimer -= dt * (1000/CONFIG.TARGET_FPS);
-            if (this.cloakTimer <= 0) { this.cloaked = !this.cloaked; this.cloakTimer = this.cloaked ? this.config.CLOAK_DUR : this.config.UNCLOAK_DUR; }
+            if (this.cloakTimer <= 0) {
+                if (this.cloaked) {
+                    // Uncloak behind player
+                    const a = state.player.angle + Math.PI;
+                    this.x = state.player.x + Math.cos(a) * 40;
+                    this.y = state.player.y + Math.sin(a) * 40;
+                }
+                this.cloaked = !this.cloaked;
+                this.cloakTimer = this.cloaked ? this.config.CLOAK_DUR : this.config.UNCLOAK_DUR;
+            }
+            if (this.cloaked) {
+                const dx = state.player.x - this.x; const dy = state.player.y - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                this.x += (dx/dist) * this.speed * 1.5 * dt;
+                this.y += (dy/dist) * this.speed * 1.5 * dt;
+            }
         }
         draw() { ctx.globalAlpha = this.cloaked ? 0.3 : 1.0; super.draw(); ctx.globalAlpha = 1.0; }
     }
@@ -344,7 +363,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- WEAPON & PROJECTILE CLASSES ---
-    class Weapon { constructor(owner) { this.owner = owner; this.level = 1; this.fireRate = 500; this.fireCooldown = 0; } update(dt) { this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS) * this.owner.fireRateMultiplier; if (this.fireCooldown <= 0) { this.fire(); this.fireCooldown = this.fireRate; } } fire() {} }
+    class Weapon {
+        constructor(owner) { this.owner = owner; this.level = 1; this.fireRate = 500; this.fireCooldown = 0; }
+        update(dt) {
+            this.fireCooldown -= dt * (1000 / CONFIG.TARGET_FPS) * this.owner.fireRateMultiplier;
+            if (this.fireCooldown <= 0) {
+                if (state.autoFire) this.fire();
+                this.fireCooldown = this.fireRate;
+            }
+        }
+        fire() {}
+    }
     class BasicCannon extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.CANNON }; this.fireRate = this.config.FIRE_RATE; this.projectiles = 1; } fire() { const spread = 0.3; for (let i = 0; i < this.projectiles && state.projectiles.length < 1000; i++) { const angle = this.owner.angle + (i - (this.projectiles - 1) / 2) * spread; state.projectiles.push(new Projectile(this.owner.x, this.owner.y, angle, this.config, this.owner)); } } }
     class ShardLauncher extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SHARD }; this.fireRate = this.config.FIRE_RATE; this.shards = 8; } fire() { for (let i = 0; i < this.shards && state.projectiles.length < 1000; i++) { const angle = (i / this.shards) * Math.PI * 2 + state.gameTime / 1000; state.projectiles.push(new Projectile(this.owner.x, this.owner.y, angle, this.config, this.owner)); } } }
     class OrbitingShield extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.ORBITER }; this.fireRate = 999999; this.orbs = []; this.addOrb(); } addOrb() { const orb = new Projectile(0, 0, 0, this.config, this.owner); orb.lifespan = Infinity; orb.isOrbiter = true; this.orbs.push(orb); state.projectiles.push(orb); } update(dt) { const orbitRadius = this.config.ORBIT_RADIUS * this.owner.areaMultiplier; const orbitSpeed = this.config.ORBIT_SPEED; this.orbs.forEach((orb, i) => { const angle = state.gameTime * orbitSpeed * dt + (i / this.orbs.length) * Math.PI * 2; orb.x = this.owner.x + Math.cos(angle) * orbitRadius; orb.y = this.owner.y + Math.sin(angle) * orbitRadius; }); } }
@@ -614,10 +643,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const region = getRegionFor(state.player.x, state.player.y);
         state.currentRegion = region;
         if (region) {
+            region.discovered = true;
             spawnEnemiesForRegion(region);
             activateRegion(region);
             updateMusic(region);
         }
+        state.mission = generateMission();
         nextWave();
         setGameState('PLAYING');
     }
@@ -692,12 +723,73 @@ document.addEventListener('DOMContentLoaded', () => {
         return CONFIG.MAP.REGIONS.find(r => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) || null;
     }
 
+    function getAllPOIs() {
+        return CONFIG.MAP.REGIONS.flatMap(r => r.pois);
+    }
+
+    // ----- Dynamic Events -----
+    function triggerRandomEvent() {
+        const region = CONFIG.MAP.REGIONS[Math.floor(Math.random() * CONFIG.MAP.REGIONS.length)];
+        const roll = Math.random();
+        if (roll < 0.4) spawnPirateRaid(region);
+        else if (roll < 0.7) spawnTechDrop(region);
+        else spawnWarpStorm(region);
+    }
+
+    function spawnPirateRaid(region) {
+        for (let i = 0; i < 8; i++) {
+            const x = region.x + Math.random() * region.width;
+            const y = region.y + Math.random() * region.height;
+            const enemy = Enemy.create(CONFIG.ENEMY.CHASER, x, y);
+            enemy.isWave = false;
+            enemy.active = true;
+            state.enemies.push(enemy);
+        }
+    }
+
+    function spawnTechDrop(region) {
+        const poi = { type: POI_TYPES.TECH_DROP, x: region.x + Math.random() * region.width, y: region.y + Math.random() * region.height, collected: false, timeout: state.gameTime + 15000, radius: 10 };
+        region.pois.push(poi);
+    }
+
+    function spawnWarpStorm(region) {
+        region.events.push({ type: 'warpStorm', end: state.gameTime + 15000 });
+    }
+
+    function handlePoiCollision(poi) {
+        if (poi.collected) return;
+        const region = getRegionFor(poi.x, poi.y);
+        if (poi.type === POI_TYPES.DERELICT) {
+            state.score += 50;
+        } else if (poi.type === POI_TYPES.OUTPOST) {
+            state.player.hp = state.player.maxHp;
+        } else if (poi.type === POI_TYPES.BLACK_MARKET) {
+            if (state.player.xp >= 20) { state.player.xp -= 20; state.score += 100; }
+        } else if (poi.type === POI_TYPES.TECH_DROP) {
+            state.player.addXp(50);
+        } else if (poi.type === POI_TYPES.MISSION_DATA) {
+            if (state.mission && !state.mission.completed && state.mission.poi === poi) {
+                state.mission.completed = true;
+                state.score += 200;
+            }
+        }
+        poi.collected = true;
+        if (region) region.pois = region.pois.filter(p => p !== poi);
+    }
+
+    function generateMission() {
+        const region = CONFIG.MAP.REGIONS[Math.floor(Math.random()*CONFIG.MAP.REGIONS.length)];
+        const poi = { type: POI_TYPES.MISSION_DATA, x: region.x + Math.random()*region.width, y: region.y + Math.random()*region.height, collected: false, radius: 10 };
+        region.pois.push(poi);
+        return { type: 'DATA', region, poi, description: `Recover data from ${region.name}`, completed: false };
+    }
+
     let spatialGrid;
 
     function handleCollisions() {
         spatialGrid = new Map();
         const activeEnemies = state.enemies.filter(e => e.isWave || e.active);
-        const allEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.xpOrbs, ...state.drones];
+        const allEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.xpOrbs, ...state.drones, ...getAllPOIs()];
         for (const entity of allEntities) {
             if (!entity) continue;
             const key = `${Math.floor(entity.x / CONFIG.SPATIAL_GRID_CELL_SIZE)}|${Math.floor(entity.y / CONFIG.SPATIAL_GRID_CELL_SIZE)}`;
@@ -712,6 +804,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (e2 instanceof Player && e1 instanceof Enemy) e2.takeDamage(e1.damage);
                 else if (e1 instanceof Player && e2 instanceof XpOrb) { e1.addXp(e2.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e2); }
                 else if (e2 instanceof Player && e1 instanceof XpOrb) { e2.addXp(e1.value); state.xpOrbs = state.xpOrbs.filter(o => o !== e1); }
+                else if (e1 instanceof Player && e2.type) handlePoiCollision(e2);
+                else if (e2 instanceof Player && e1.type) handlePoiCollision(e1);
                 else if (e1 instanceof Projectile && e2 instanceof Enemy) handleProjectileEnemy(e1, e2);
                 else if (e2 instanceof Projectile && e1 instanceof Enemy) handleProjectileEnemy(e2, e1);
                 else if (e1 instanceof Enemy && e2 instanceof Enemy && e1.faction !== e2.faction) {
@@ -783,6 +877,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function update(dt) {
         state.gameTime += dt;
+        state.eventTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+        if (state.eventTimer <= 0) {
+            triggerRandomEvent();
+            state.eventTimer = 20000 + Math.random() * 10000;
+        }
         if (!state.hyperspaceActive) {
             if (state.keys[' ']) {
                 state.hyperspaceCharge += dt * (1000 / CONFIG.TARGET_FPS);
@@ -804,9 +903,20 @@ document.addEventListener('DOMContentLoaded', () => {
             deactivateRegion(state.currentRegion);
             state.currentRegion = region;
             if (region) {
+                region.discovered = true;
                 spawnEnemiesForRegion(region);
                 activateRegion(region);
                 updateMusic(region);
+            }
+        }
+        if (region && region.events) {
+            region.events = region.events.filter(ev => ev.end > state.gameTime);
+            const storm = region.events.find(ev => ev.type === 'warpStorm');
+            if (storm) {
+                state.player.hp = Math.max(1, state.player.hp - 0.05 * dt);
+                state.speedBoost = 1.5;
+            } else {
+                state.speedBoost = 1;
             }
         }
         state.enemies.forEach(e => { if (e.isWave || e.active) e.update(dt); });
@@ -817,6 +927,9 @@ document.addEventListener('DOMContentLoaded', () => {
         handleGravity(dt);
         state.particles = state.particles.filter(p => p.lifespan > 0);
         state.particles.forEach(p => p.update(dt));
+        if (region && region.enemies && !region.cleared) {
+            if (region.enemies.every(e => e.hp <= 0)) region.cleared = true;
+        }
         const remainingWave = state.enemies.filter(e => e.isWave).length;
         if (remainingWave === 0 && state.gameState === 'PLAYING') nextWave();
         state.camera.x = state.player.x - canvas.width / 2;
@@ -856,6 +969,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         dom.waveCounter.textContent = state.wave;
         dom.scoreCounter.textContent = state.score;
+        if (state.mission) {
+            dom.missionInfo.textContent = state.mission.completed ? 'Mission Complete' : state.mission.description;
+        }
         // HP/XP bars: avoid division by zero
         dom.hpValue.textContent = `${Math.ceil(state.player.hp)}/${Math.ceil(state.player.maxHp)}`;
         dom.hpBar.style.width = state.player.maxHp > 0 ? `${Math.max(0, Math.min(1, state.player.hp / state.player.maxHp)) * 100}%` : '0%';
@@ -951,12 +1067,17 @@ document.addEventListener('DOMContentLoaded', () => {
         CONFIG.MAP.REGIONS.forEach(r => {
             const rx = r.x - minX, ry = r.y - minY;
             if (rx + r.width < 0 || ry + r.height < 0 || rx > view || ry > view) return;
-            mCtx.fillStyle = r.color || '#444';
-            mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
-            mCtx.fillStyle = '#fff';
-            mCtx.font = '10px sans-serif';
-            mCtx.textAlign = 'center';
-            mCtx.fillText(r.name, (rx + r.width/2)*scaleX, (ry + r.height/2)*scaleY);
+            if (r.discovered) {
+                mCtx.fillStyle = r.color || '#444';
+                mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
+                mCtx.fillStyle = '#fff';
+                mCtx.font = '10px sans-serif';
+                mCtx.textAlign = 'center';
+                mCtx.fillText(r.name, (rx + r.width/2)*scaleX, (ry + r.height/2)*scaleY);
+            } else {
+                mCtx.fillStyle = '#111';
+                mCtx.fillRect(rx*scaleX, ry*scaleY, r.width*scaleX, r.height*scaleY);
+            }
         });
         state.enemies.forEach(e => {
             if (!e.isWave && !e.active) return;
@@ -964,6 +1085,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const ey = (e.y - minY) * scaleY;
             mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
             mCtx.fillRect(ex-1, ey-1, 2, 2);
+        });
+        getAllPOIs().forEach(poi => {
+            const px = (poi.x - minX) * scaleX;
+            const py = (poi.y - minY) * scaleY;
+            if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
+            else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
+            else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
+            else mCtx.fillStyle = '#ffff00';
+            mCtx.fillRect(px-1, py-1, 2, 2);
         });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
@@ -980,17 +1110,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleY = canvasMap.height / state.map.HEIGHT;
         mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
         CONFIG.MAP.REGIONS.forEach(r => {
-            mCtx.fillStyle = r.color || '#444';
-            mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
-            mCtx.fillStyle = '#fff';
-            mCtx.font = '16px sans-serif';
-            mCtx.textAlign = 'center';
-            mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
+            if (r.discovered) {
+                mCtx.fillStyle = r.color || '#444';
+                mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+                mCtx.fillStyle = '#fff';
+                mCtx.font = '16px sans-serif';
+                mCtx.textAlign = 'center';
+                mCtx.fillText(r.name, (r.x + r.width/2)*scaleX, (r.y + r.height/2)*scaleY);
+            } else {
+                mCtx.fillStyle = '#111';
+                mCtx.fillRect(r.x*scaleX, r.y*scaleY, r.width*scaleX, r.height*scaleY);
+            }
         });
         state.enemies.forEach(e => {
             if (!e.isWave && !e.active) return;
             mCtx.fillStyle = e.isWave ? '#ff0000' : e.color;
             mCtx.fillRect(e.x*scaleX-2, e.y*scaleY-2, 4, 4);
+        });
+        getAllPOIs().forEach(poi => {
+            if (poi.type === POI_TYPES.OUTPOST) mCtx.fillStyle = '#00ff88';
+            else if (poi.type === POI_TYPES.BLACK_MARKET) mCtx.fillStyle = '#ff00ff';
+            else if (poi.type === POI_TYPES.DERELICT) mCtx.fillStyle = '#aaaaaa';
+            else mCtx.fillStyle = '#ffff00';
+            mCtx.fillRect(poi.x*scaleX-2, poi.y*scaleY-2, 4, 4);
         });
         mCtx.fillStyle = '#00f5d4';
         mCtx.beginPath();
@@ -1019,6 +1161,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.key.toLowerCase() === 'm') {
                     state.showMap = !state.showMap;
                     dom.mapOverlay.classList.toggle('visible', state.showMap);
+                }
+                if (e.key.toLowerCase() === 'p') {
+                    state.autoFire = !state.autoFire;
                 }
                 if (state.showMap && (e.key === '+' || e.key === '=')) { mapZoom = Math.min(1, mapZoom * 1.2); drawFullMap(); }
                 if (state.showMap && (e.key === '-' || e.key === '_')) { mapZoom = Math.max(0.1, mapZoom / 1.2); drawFullMap(); }

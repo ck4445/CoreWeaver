@@ -1205,9 +1205,13 @@ if (movementTarget) {
     function spawnSectorInvasion() {
         const occupied = CONFIG.MAP.REGIONS.filter(r => r.faction);
         if (occupied.length < 2) return;
-        const attackerRegion = occupied[Math.floor(Math.random()*occupied.length)];
-        let targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
-        while (targetRegion === attackerRegion) targetRegion = occupied[Math.floor(Math.random()*occupied.length)];
+
+        const attackerRegion = occupied[Math.floor(Math.random() * occupied.length)];
+        let targetRegion = occupied[Math.floor(Math.random() * occupied.length)];
+        while (targetRegion === attackerRegion) {
+            targetRegion = occupied[Math.floor(Math.random() * occupied.length)];
+        }
+
         const attacker = attackerRegion.faction;
         const defender = targetRegion.faction;
         const invasion = {
@@ -1217,28 +1221,31 @@ if (movementTarget) {
             attackers: [],
             defenders: [],
         };
-for (let i = 0; i < 4; i++) {
-    const ax = targetRegion.x + Math.random() * targetRegion.width;
-    const ay = targetRegion.y + Math.random() * targetRegion.height;
-    const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
-}
 
+        for (let i = 0; i < 4; i++) {
+            const ax = targetRegion.x + Math.random() * targetRegion.width;
+            const ay = targetRegion.y + Math.random() * targetRegion.height;
+            const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
             enemyA.faction = attacker;
             enemyA.active = true;
             enemyA.invasion = invasion;
             enemyA.side = 'attackers';
-            enemyA.onDeath = function() { invasion.attackers = invasion.attackers.filter(e => e !== this); };
+            enemyA.onDeath = function() {
+                invasion.attackers = invasion.attackers.filter(e => e !== this);
+            };
             invasion.attackers.push(enemyA);
             state.enemies.push(enemyA);
-            const dx = targetRegion.x + Math.random()*targetRegion.width;
-            const dy = targetRegion.y + Math.random()*targetRegion.height;
-const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
 
+            const dx = targetRegion.x + Math.random() * targetRegion.width;
+            const dy = targetRegion.y + Math.random() * targetRegion.height;
+            const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
             enemyD.faction = defender;
             enemyD.active = true;
             enemyD.invasion = invasion;
             enemyD.side = 'defenders';
-            enemyD.onDeath = function() { invasion.defenders = invasion.defenders.filter(e => e !== this); };
+            enemyD.onDeath = function() {
+                invasion.defenders = invasion.defenders.filter(e => e !== this);
+            };
             invasion.defenders.push(enemyD);
             state.enemies.push(enemyD);
         }

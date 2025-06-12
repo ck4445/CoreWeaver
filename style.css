@@ -433,75 +433,133 @@ button:hover {
 }
 
 .control-panel-card {
-    max-width: 600px;
+    max-width: 500px;
     display: flex;
     flex-direction: column;
     gap: 20px;
     align-items: center;
-    padding: 20px;
 }
 
 #app-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
     gap: 10px;
+    width: 100%;
 }
 
 .app-icon {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    font-size: 28px;
-    padding: 15px;
+    font-size: 32px;
+    padding: 10px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     cursor: pointer;
+    text-align: center;
     user-select: none;
-    background-color: rgba(255,255,255,0.05);
-    transition: background-color 0.2s;
 }
 
 .app-icon:hover {
-    background-color: rgba(255,255,255,0.1);
-}
-
-.app-icon .label {
-    font-size: 14px;
-}
-
-#skill-tree-view {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    justify-content: center;
-}
-
-.skill-category {
     background-color: rgba(0,0,0,0.3);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 10px;
-    width: 160px;
 }
 
-.skill-category h3 {
-    color: var(--accent-color);
-    margin-bottom: 8px;
-    font-size: 18px;
+/* NEW STYLES FOR APP CARDS */
+.app-card {
+    max-width: 600px; /* Wider for more content */
+    width: 90%;
+    text-align: left;
 }
 
-.skill-category ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+.app-card .close-app {
+    display: block;
+    margin: 20px auto 0;
 }
 
-.skill-category li {
+/* Stats View */
+#stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 16px;
+}
+.stat-item {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 4px;
-    font-size: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+.stat-item strong {
+    color: var(--text-color);
+    font-weight: 600;
+    opacity: 0.8;
+}
+.stat-item span {
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+/* Modifiers List */
+#modifiers-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+#modifiers-list li {
+    display: flex;
+    justify-content: space-between;
+    background-color: rgba(0,0,0,0.2);
+    padding: 10px 15px;
+    border-radius: 4px;
+    border-left: 3px solid var(--accent-color);
+}
+#modifiers-list li .mod-value {
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
+/* Skill Tree View */
+#skill-tree-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.skill-category h3 {
+    color: var(--accent-color);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+.skill-item {
+    display: flex;
+    justify-content: space-between;
+}
+.skill-item .skill-name {
+    text-transform: capitalize;
+}
+.skill-item .skill-level {
+    font-weight: bold;
+    color: var(--xp-color);
+}
+
+/* News Feed */
+#news-list {
+    list-style: none;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px; /* for scrollbar */
+}
+#news-list li {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border-color);
+    opacity: 0.9;
+}
+#news-list li:last-child {
+    border-bottom: none;
+}
+#news-list li .news-time {
+    display: block;
+    font-size: 12px;
+    opacity: 0.6;
+    margin-top: 4px;
 }
 
 #news-popup {

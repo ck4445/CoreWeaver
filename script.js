@@ -681,14 +681,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (region.spawned) return;
         region.spawned = true;
         region.enemies = [];
-        const perFaction = 50;
         let configs = [];
-        if (region.faction === FACTIONS.PIRATE) configs = [CONFIG.ENEMY.CHASER];
-        else if (region.faction === FACTIONS.SAMA) configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
-        if (!configs.length) return;
-        for (let i = 0; i < perFaction; i++) {
-            const x = region.x + Math.random() * region.width;
-            const y = region.y + Math.random() * region.height;
+        let count = 50;
+        if (region.faction === FACTIONS.PIRATE) {
+            configs = [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER, CONFIG.ENEMY.SHOOTER];
+        } else if (region.faction === FACTIONS.SAMA) {
+            configs = [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER];
+        } else {
+            configs = [CONFIG.ENEMY.SWARMER, CONFIG.ENEMY.CLOAKER];
+            count = 20;
+        }
+        const clusters = region.faction ? 3 : 5;
+        const centers = [];
+        for (let i = 0; i < clusters; i++) {
+            centers.push({
+                x: region.x + Math.random() * region.width,
+                y: region.y + Math.random() * region.height,
+            });
+        }
+        for (let i = 0; i < count; i++) {
+            const center = centers[Math.floor(Math.random() * centers.length)];
+            const x = center.x + (Math.random() - 0.5) * region.width * 0.3;
+            const y = center.y + (Math.random() - 0.5) * region.height * 0.3;
             const cfg = configs[Math.floor(Math.random() * configs.length)];
             const enemy = Enemy.create(cfg, x, y);
             enemy.region = region;
@@ -719,8 +733,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function pointInPolygon(x, y, pts) {
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i].x, yi = pts[i].y;
+            const xj = pts[j].x, yj = pts[j].y;
+            const intersect = ((yi > y) !== (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
     function getRegionFor(x, y) {
-        return CONFIG.MAP.REGIONS.find(r => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) || null;
+        return CONFIG.MAP.REGIONS.find(r =>
+            x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height &&
+            pointInPolygon(x, y, r.points)
+        ) || null;
     }
 
     function getAllPOIs() {
@@ -1058,6 +1087,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function drawRegionPath(ctx, points, offsetX, offsetY, scaleX, scaleY) {
+        ctx.beginPath();
+        ctx.moveTo((points[0].x - offsetX) * scaleX, (points[0].y - offsetY) * scaleY);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo((points[i].x - offsetX) * scaleX, (points[i].y - offsetY) * scaleY);
+        }
+        ctx.closePath();
+    }
+
     function drawMiniMap() {
         const mCtx = dom.minimap.getContext('2d');
         const view = MINIMAP_VIEW;
@@ -1070,8 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rx = r.cx - minX, ry = r.cy - minY;
             if (rx + r.width/2 < 0 || ry + r.height/2 < 0 || rx - r.width/2 > view || ry - r.height/2 > view) return;
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
-            mCtx.beginPath();
-            mCtx.ellipse(rx*scaleX, ry*scaleY, (r.width/2)*scaleX, (r.height/2)*scaleY, 0, 0, Math.PI*2);
+            drawRegionPath(mCtx, r.points, minX, minY, scaleX, scaleY);
             mCtx.fill();
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';
@@ -1122,8 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mCtx.clearRect(0,0,canvasMap.width,canvasMap.height);
         CONFIG.MAP.REGIONS.forEach(r => {
             mCtx.fillStyle = r.discovered ? (r.color || '#444') : '#111';
-            mCtx.beginPath();
-            mCtx.ellipse(r.cx*scaleX, r.cy*scaleY, (r.width/2)*scaleX, (r.height/2)*scaleY, 0, 0, Math.PI*2);
+            drawRegionPath(mCtx, r.points, 0, 0, scaleX, scaleY);
             mCtx.fill();
             if (r.discovered) {
                 mCtx.fillStyle = '#fff';

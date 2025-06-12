@@ -42,14 +42,31 @@ function generateMapRegions(width, height) {
         [cells[i], cells[j]] = [cells[j], cells[i]];
     }
 
+    function createPolygon(cell) {
+        const segments = 6 + Math.floor(Math.random() * 3);
+        const cx = cell.x + cell.width / 2 + (Math.random() - 0.5) * cell.width * 0.2;
+        const cy = cell.y + cell.height / 2 + (Math.random() - 0.5) * cell.height * 0.2;
+        const points = [];
+        for (let i = 0; i < segments; i++) {
+            const a = (i / segments) * Math.PI * 2;
+            const rx = (cell.width / 2) * (0.6 + Math.random() * 0.4);
+            const ry = (cell.height / 2) * (0.6 + Math.random() * 0.4);
+            points.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+        }
+        const xs = points.map(p => p.x);
+        const ys = points.map(p => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        return { points, x: minX, y: minY, width: maxX - minX, height: maxY - minY, cx, cy };
+    }
+
     const pirateCount = Math.floor(cells.length * 0.25);
     const samaCount = Math.floor(cells.length * 0.25);
     const regions = [];
     cells.forEach((cell, idx) => {
-        const w = cell.width * (0.8 + Math.random() * 0.4);
-        const h = cell.height * (0.8 + Math.random() * 0.4);
-        const cx = cell.x + cell.width / 2 + (Math.random() - 0.5) * cell.width * 0.2;
-        const cy = cell.y + cell.height / 2 + (Math.random() - 0.5) * cell.height * 0.2;
+        const shape = createPolygon(cell);
         let faction, name, color, music;
         if (idx < pirateCount) {
             faction = FACTIONS.PIRATE;
@@ -68,12 +85,7 @@ function generateMapRegions(width, height) {
             music = 'dead_space.ogg';
         }
         regions.push({
-            x: cx - w / 2,
-            y: cy - h / 2,
-            width: w,
-            height: h,
-            cx,
-            cy,
+            ...shape,
             name,
             faction,
             color,

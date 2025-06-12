@@ -1,5 +1,3 @@
-'use strict';
-
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -38,9 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
         newsOverlay: document.getElementById('news-overlay'),
         newsList: document.getElementById('news-list'),
         skillOverlay: document.getElementById('skill-overlay'),
-        skillTreeView: document.getElementById('skill-tree-view'),
+        skillTreeContent: document.getElementById('skill-tree-content'), // Updated
         statsOverlay: document.getElementById('stats-overlay'),
-        statsView: document.getElementById('stats-view'),
+        statsContent: document.getElementById('stats-content'), // Updated
         modifiersOverlay: document.getElementById('modifiers-overlay'),
         modifiersList: document.getElementById('modifiers-list'),
         newsPopup: document.getElementById('news-popup'),
@@ -225,63 +223,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateNewsFeed() {
         dom.newsList.innerHTML = '';
-        const items = [...state.newsFeed].sort((a,b) => b.timestamp - a.timestamp);
+        const items = [...state.newsFeed].sort((a, b) => b.timestamp - a.timestamp);
         items.forEach(n => {
             const li = document.createElement('li');
-            li.textContent = n.message;
+            const time = new Date(n.timestamp).toLocaleTimeString();
+            li.innerHTML = `${n.message}<span class="news-time">${time}</span>`;
             li.style.color = n.color || '';
             dom.newsList.appendChild(li);
         });
     }
 
     function updateSkillViewer() {
-        dom.skillTreeView.innerHTML = '';
-        Object.entries(state.skillTree).forEach(([category, skills]) => {
-            const catDiv = document.createElement('div');
-            catDiv.className = 'skill-category';
-            const title = document.createElement('h3');
-            title.textContent = category.charAt(0).toUpperCase() + category.slice(1);
-            const ul = document.createElement('ul');
-            Object.entries(skills).forEach(([skill, level]) => {
-                const li = document.createElement('li');
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = skill;
-                const levelSpan = document.createElement('span');
-                levelSpan.textContent = level;
-                li.append(nameSpan, levelSpan);
-                ul.appendChild(li);
-            });
-            catDiv.append(title, ul);
-            dom.skillTreeView.appendChild(catDiv);
-        });
+        if (!state || !state.skillTree) return;
+        let html = '';
+        for (const category in state.skillTree) {
+            html += `<div class="skill-category"><h3>${category.toUpperCase()}</h3>`;
+            for (const skill in state.skillTree[category]) {
+                const level = state.skillTree[category][skill];
+                html += `<div class="skill-item">
+                           <span class="skill-name">${skill}</span>
+                           <span class="skill-level">Level ${level}</span>
+                         </div>`;
+            }
+            html += `</div>`;
+        }
+        dom.skillTreeContent.innerHTML = html;
     }
 
     function updateStatsView() {
-        if (!state.player) return;
-        const stats = {
-            level: state.player.level,
-            xp: state.player.xp,
-            credits: state.credits,
-            hp: `${state.player.hp}/${state.player.maxHp}`,
-        };
-        dom.statsView.textContent = JSON.stringify(stats, null, 2);
+        if (!state || !state.player) return;
+
+        const createStatItem = (label, value) => `
+            <div class="stat-item">
+                <strong>${label}</strong>
+                <span>${value}</span>
+            </div>`;
+
+        let html = '';
+        html += createStatItem('Level', state.player.level);
+        html += createStatItem('Experience', `${state.player.xp.toFixed(0)} / ${state.player.xpToNextLevel.toFixed(0)}`);
+        html += createStatItem('Credits', state.credits);
+        html += createStatItem('Hull Integrity', `${Math.ceil(state.player.hp)} / ${Math.ceil(state.player.maxHp)}`);
+        html += createStatItem('Movement Speed', `${(state.player.speed / CONFIG.PLAYER.SPEED * 100).toFixed(0)}%`);
+        html += createStatItem('Magnet Radius', `${(state.player.magnetRadius / CONFIG.PLAYER.MAGNET_RADIUS * 100).toFixed(0)}%`);
+        
+        dom.statsContent.innerHTML = html;
     }
 
     function updateModifiersView() {
-        if (!state.player) return;
+        if (!state || !state.player) return;
         dom.modifiersList.innerHTML = '';
         const mods = [
-            {name:'Damage', val: `${((state.player.damageMultiplier-1)*100).toFixed(0)}%`},
-            {name:'Fire Rate', val: `${((state.player.fireRateMultiplier-1)*100).toFixed(0)}%`},
-            {name:'Projectile Speed', val: `${((state.player.projectileSpeedMultiplier-1)*100).toFixed(0)}%`},
-            {name:'Area', val: `${((state.player.areaMultiplier-1)*100).toFixed(0)}%`},
+            { name: 'Damage Bonus', val: `${((state.player.damageMultiplier - 1) * 100).toFixed(0)}%` },
+            { name: 'Fire Rate Bonus', val: `${((state.player.fireRateMultiplier - 1) * 100).toFixed(0)}%` },
+            { name: 'Crit Chance', val: `${(state.player.critChance * 100).toFixed(0)}%` },
+            { name: 'Crit Damage Bonus', val: `${((state.player.critDamage - CONFIG.PLAYER.BASE_CRIT_DAMAGE) * 100).toFixed(0)}%` },
+            { name: 'Projectile Speed', val: `${((state.player.projectileSpeedMultiplier - 1) * 100).toFixed(0)}%` },
+            { name: 'Area of Effect', val: `${((state.player.areaMultiplier - 1) * 100).toFixed(0)}%` },
         ];
-        mods.forEach(m => { const li=document.createElement('li'); li.textContent=`${m.name}: ${m.val}`; dom.modifiersList.appendChild(li); });
+        mods.forEach(m => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="mod-name">${m.name}</span><span class="mod-value">+${m.val}</span>`;
+            dom.modifiersList.appendChild(li);
+        });
     }
 
     function toggleControlPanel(force) {
-        const show = typeof force === 'boolean' ? force : dom.controlPanel.classList.contains('hidden');
-        dom.controlPanel.classList.toggle('hidden', !show);
+        const show = typeof force === 'boolean' ? force : !dom.controlPanel.classList.contains('visible');
         dom.controlPanel.classList.toggle('visible', show);
     }
 
@@ -296,13 +304,13 @@ document.addEventListener('DOMContentLoaded', () => {
             modifiers: dom.modifiersOverlay,
         };
         Object.values(map).forEach(el => {
-            el.classList.add('hidden');
             el.classList.remove('visible');
         });
         const target = map[id];
         if (!target) return;
         target.classList.add('visible');
-        target.classList.remove('hidden');
+
+        // Update content when opening
         if (id === 'diplomacy') updateDiplomacyUI();
         if (id === 'quests') updateQuestLog();
         if (id === 'news') updateNewsFeed();
@@ -911,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.gameState = newState;
         dom.overlay.classList.toggle('active', newState !== 'PLAYING');
         dom.hud.classList.toggle('hidden', newState !== 'PLAYING');
-        dom.startMenu.classList.add('hidden'); dom.levelUpMenu.classList.add('hidden'); dom.gameOverMenu.classList.add('hidden');
+        dom.startMenu.classList.add('hidden'); dom.levelUpMenu.classList.add('hidden'); dom.gameOverMenu.classList.add('hidden'); dom.classMenu.classList.add('hidden');
         if (state.animationFrameId) {
             cancelAnimationFrame(state.animationFrameId);
             state.animationFrameId = null;
@@ -1613,14 +1621,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (e.key === 'Tab') {
                     e.preventDefault();
-                    const visible = dom.diplomacyOverlay.classList.toggle('visible');
-                    dom.diplomacyOverlay.classList.toggle('hidden', !visible);
-                    if (visible) updateDiplomacyUI();
+                    const isVisible = !dom.diplomacyOverlay.classList.contains('visible');
+                    dom.diplomacyOverlay.classList.toggle('visible', isVisible);
+                    if (isVisible) updateDiplomacyUI();
                 }
                 if (e.key.toLowerCase() === 'j') {
-                    const visible = dom.questOverlay.classList.toggle('visible');
-                    dom.questOverlay.classList.toggle('hidden', !visible);
-                    if (visible) updateQuestLog();
+                    const isVisible = !dom.questOverlay.classList.contains('visible');
+                    dom.questOverlay.classList.toggle('visible', isVisible);
+                    if (isVisible) updateQuestLog();
                 }
                 if (e.key.toLowerCase() === 'c') {
                     toggleControlPanel();
@@ -1641,12 +1649,10 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.startButton.addEventListener('click', startGame);
         dom.restartButton.addEventListener('click', startGame);
         dom.closeDiplomacy.addEventListener('click', () => {
-            dom.diplomacyOverlay.classList.add('hidden');
             dom.diplomacyOverlay.classList.remove('visible');
         });
         dom.closeTrade.addEventListener('click', closeTrade);
         dom.closeQuests.addEventListener('click', () => {
-            dom.questOverlay.classList.add('hidden');
             dom.questOverlay.classList.remove('visible');
         });
         if (dom.closeControl) dom.closeControl.addEventListener('click', () => toggleControlPanel(false));
@@ -1657,7 +1663,6 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => {
                 const target = document.getElementById(btn.dataset.target);
                 if (target) {
-                    target.classList.add('hidden');
                     target.classList.remove('visible');
                 }
             });

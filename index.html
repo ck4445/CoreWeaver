@@ -46,6 +46,7 @@
                 <div class="app-icon" data-app="skills" aria-label="Skills" role="button">🌿</div>
                 <div class="app-icon" data-app="stats" aria-label="Stats" role="button">📊</div>
                 <div class="app-icon" data-app="modifiers" aria-label="Modifiers" role="button">🧬</div>
+                <div class="app-icon" data-app="inventory" aria-label="Inventory" role="button">🎒</div>
             </div>
             <button id="close-control-panel">Close</button>
         </div>
@@ -76,6 +77,13 @@
             <h2>Active Modifiers</h2>
             <ul id="modifiers-list"></ul>
             <button class="close-app" data-target="modifiers-overlay">Close</button>
+        </div>
+    </div>
+    <div id="inventory-overlay" class="hidden" aria-hidden="true">
+        <div class="menu-card inventory-card">
+            <h2>Inventory</h2>
+            <ul id="inventory-list"></ul>
+            <button id="close-inventory">Close</button>
         </div>
     </div>
     <div id="dialogue-overlay" class="hidden" aria-hidden="true">

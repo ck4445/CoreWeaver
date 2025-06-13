@@ -336,7 +336,8 @@ button:hover {
 }
 
 #trade-overlay,
-#quest-overlay {
+#quest-overlay,
+#inventory-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -350,12 +351,29 @@ button:hover {
 }
 
 #trade-overlay.visible,
-#quest-overlay.visible {
+#quest-overlay.visible,
+#inventory-overlay.visible {
     display: flex;
 }
 
 .trade-card, .quest-card {
     max-width: 600px;
+}
+.inventory-card { max-width: 600px; }
+
+#inventory-list {
+    list-style: none;
+    margin: 15px 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+#inventory-list li {
+    display: flex;
+    justify-content: space-between;
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    margin-bottom: 5px;
 }
 
 #trade-items {

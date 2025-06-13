@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         questList: document.getElementById('quest-list'),
         closeQuests: document.getElementById('close-quests'),
         controlPanel: document.getElementById('control-panel'),
-        closeControl: document.getElementById('close-control-panel'),
+        closeControlPanel: document.getElementById('close-control-panel'),
         newsOverlay: document.getElementById('news-overlay'),
         newsList: document.getElementById('news-list'),
         skillOverlay: document.getElementById('skill-overlay'),
@@ -530,7 +530,8 @@ let firingTarget = target;
 
 if (movementTarget) {
     const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
-    const dist = Math.sqrt(dx * dx + dy * dy); const prefer = this.config.PREF_DIST;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1; // Default to 1 if dist is 0
+    const prefer = this.config.PREF_DIST;
     if (dist > prefer) {
         const spd = this.speed * Math.min(1, (dist - prefer) / prefer);
         this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt;
@@ -727,7 +728,7 @@ if (movementTarget) {
                 let angleDiff = targetAngle - currentAngle;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2; while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
                 const newAngle = currentAngle + Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), this.config.TURN_RATE * dt);
-                const speed = this.config.SPEED * (this.owner ? this.owner.projectileSpeedMultiplier : 1);
+                const speed = this.config.SPEED * ((this.owner && this.owner.projectileSpeedMultiplier) || 1);
                 this.vx = Math.cos(newAngle) * speed; this.vy = Math.sin(newAngle) * speed;
             }
             this.x += this.vx * dt; this.y += this.vy * dt;
@@ -792,6 +793,7 @@ if (movementTarget) {
     class KineticSlash extends Projectile {
         constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.lifespan = this.config.DURATION; this.vx = 0; this.vy = 0; this.hitEnemies = new Set(); }
         update(dt) {
+            if (!this.owner) { this.destroy(); return; }
             this.lifespan -= dt * (1000 / CONFIG.TARGET_FPS); if (this.lifespan <= 0) this.destroy();
             for (const enemy of state.enemies) {
                 if (this.hitEnemies.has(enemy)) continue;
@@ -804,7 +806,7 @@ if (movementTarget) {
                 }
             }
         }
-        draw() { ctx.save(); ctx.translate(this.owner.x, this.owner.y); ctx.rotate(this.owner.angle); ctx.fillStyle = this.color; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, this.config.RANGE * (this.owner ? this.owner.areaMultiplier : 1), -this.config.ARC/2, this.config.ARC/2); ctx.closePath(); ctx.fill(); ctx.restore(); }
+        draw() { if (!this.owner) return; ctx.save(); ctx.translate(this.owner.x, this.owner.y); ctx.rotate(this.owner.angle); ctx.fillStyle = this.color; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, this.config.RANGE * (this.owner ? this.owner.areaMultiplier : 1), -this.config.ARC/2, this.config.ARC/2); ctx.closePath(); ctx.fill(); ctx.restore(); }
     }
     class KineticBlade extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.BLADE }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new KineticSlash(this.owner.x, this.owner.y, 0, this.config, this.owner)); } }
 
@@ -997,6 +999,10 @@ class BouncingProjectile extends Projectile {
         this.bounces--;
         if (this.bounces <= 0) { this.destroy(); return; }
         const next = state.enemies.filter(e => e !== enemy).sort((a,b)=>{const d1=(a.x-this.x)**2+(a.y-this.y)**2;const d2=(b.x-this.x)**2+(b.y-this.y)**2;return d1-d2;})[0];
+    if (!next) {
+        this.destroy();
+        return;
+    }
         if (next) {
             const angle = Math.atan2(next.y - enemy.y, next.x - enemy.x);
             this.x = enemy.x; this.y = enemy.y; this.vx = Math.cos(angle) * this.config.SPEED; this.vy = Math.sin(angle) * this.config.SPEED;
@@ -1009,7 +1015,7 @@ class BouncerGun extends Weapon { constructor(owner) { super(owner); this.config
 
 class SplitProjectile extends Projectile {
     constructor(x,y,angle,config,owner){ super(x,y,angle,config,owner); this.timer = config.SPLIT_TIME; }
-    update(dt){ super.update(dt); this.timer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.timer <=0){ const angles=[this.angle+0.2,this.angle-0.2]; for(const a of angles){ state.projectiles.push(new Projectile(this.x,this.y,a,this.config,this.owner)); } this.destroy(); } }
+    update(dt){ super.update(dt); this.timer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.timer <=0){ const currentAngle = Math.atan2(this.vy, this.vx); const angles=[currentAngle+0.2,currentAngle-0.2]; for(const a of angles){ state.projectiles.push(new Projectile(this.x,this.y,a,this.config,this.owner)); } this.destroy(); } }
 }
 class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.config={...CONFIG.WEAPONS.SPLIT_SHOT}; this.fireRate=this.config.FIRE_RATE; } fire(){ if(state.projectiles.length<1000) state.projectiles.push(new SplitProjectile(this.owner.x,this.owner.y,this.owner.angle,this.config,this.owner)); } }
 
@@ -1102,19 +1108,24 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
             if (sama && !weaponChoices.some(w => w.id === 'add_sama_pulse')) weaponChoices.push(sama);
         }
         let weaponCount = 0;
-        if (weaponChoices.length) {
+        if (weaponChoices.length > 0) { // Check if array is not empty before splice
             const first = weaponChoices.splice(Math.floor(Math.random() * weaponChoices.length), 1)[0];
-            choices.push(first);
-            weaponCount = 1;
+            if (first) { // Ensure the spliced element is not undefined
+                choices.push(first);
+                weaponCount = 1;
+            }
         }
         const choiceLimit = (player.passives && player.passives.extraUpgradeChoice) ? 5 : 4;
         while (choices.length < choiceLimit) {
             let pick = null;
             if (weaponCount < 2 && Math.random() < 0.5 && weaponChoices.length > 0) {
                 const remaining = weaponChoices.filter(w => !choices.includes(w));
-                if (remaining.length) {
-                    pick = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
-                    weaponCount++;
+                if (remaining.length > 0) { // Check if array is not empty before splice
+                    const tempPick = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+                    if (tempPick) { // Ensure the spliced element is not undefined
+                        pick = tempPick;
+                        weaponCount++;
+                    }
                 }
             }
             if (!pick) {
@@ -2018,7 +2029,7 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
         dom.closeQuests.addEventListener('click', () => {
             dom.questOverlay.classList.remove('visible');
         });
-        if (dom.closeControl) dom.closeControl.addEventListener('click', () => toggleControlPanel(false));
+        if (dom.closeControlPanel) dom.closeControlPanel.addEventListener('click', () => toggleControlPanel(false));
         document.querySelectorAll('.app-icon').forEach(icon => {
             icon.addEventListener('click', () => openApp(icon.dataset.app));
         });

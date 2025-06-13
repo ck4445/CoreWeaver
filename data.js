@@ -102,17 +102,17 @@ function generateMapRegions(width, height) {
             faction = FACTIONS.PIRATE;
             name = 'Pirate Outpost';
             color = '#331f20';
-            music = 'pirate_outpost.ogg';
+            music = 'assets/pirate_outpost.ogg';
         } else if (idx < pirateCount + samaCount) {
             faction = FACTIONS.SAMA;
             name = 'Sama Enclave';
             color = '#203030';
-            music = 'sama_enclave.ogg';
+            music = 'assets/sama_enclave.ogg';
         } else {
             faction = null;
             name = 'Dead Space';
             color = '#222831';
-            music = 'dead_space.ogg';
+            music = 'assets/dead_space.ogg';
         }
         regions.push({
             ...shape,

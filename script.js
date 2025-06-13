@@ -41,9 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statsContent: document.getElementById('stats-content'), // Updated
         modifiersOverlay: document.getElementById('modifiers-overlay'),
         modifiersList: document.getElementById('modifiers-list'),
-        inventoryOverlay: document.getElementById('inventory-overlay'),
-        inventoryList: document.getElementById('inventory-list'),
-        closeInventory: document.getElementById('close-inventory'),
         newsPopup: document.getElementById('news-popup'),
     };
 
@@ -58,13 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateBackground(width, height) {
         const stars = [];
         const planets = [];
-        const structures = [];
         const starColors = ['#ffffff', '#ffe5b4', '#b0e0e6', '#dcdcdc'];
         const planetColors = ['#6c5ce7', '#e17055', '#00b894', '#0984e3', '#fdcb6e'];
-        const structureColors = ['#555555', '#8844aa', '#2266aa'];
         const starCount = 20000;
         const planetCount = 50;
-        const structureCount = 200;
         for (let i = 0; i < starCount; i++) {
             stars.push({
                 x: Math.random() * width,
@@ -82,15 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 color: planetColors[Math.floor(Math.random() * planetColors.length)],
             });
         }
-        for (let i = 0; i < structureCount; i++) {
-            structures.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                r: 30 + Math.random() * 60,
-                color: structureColors[Math.floor(Math.random() * structureColors.length)],
-            });
-        }
-        return { stars, planets, structures };
+        return { stars, planets };
     }
     function getInitialState() {
         const bg = generateBackground(CONFIG.MAP.WIDTH, CONFIG.MAP.HEIGHT);
@@ -98,14 +84,13 @@ document.addEventListener('DOMContentLoaded', () => {
             gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
-            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets, structures: bg.structures,
-            autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1, speedBoostTimer: 0,
+            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
+            autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
             newsFeed: [], activeInvasions: [],
             hostileFactions: new Set(),
             factionRelations: JSON.parse(JSON.stringify(INITIAL_FACTION_RELATIONS)),
             skillTree: loadSkillTree(),
             credits: 0,
-            influence: 0,
         };
     }
 
@@ -167,8 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     dom.dialogueOverlay.classList.add('hidden');
                     if (next && next.action === 'openTrade') openTrade(npc);
                     else if (next && next.action === 'offerMission') offerMission(npc);
-                    else if (next && next.action === 'increaseInfluence') { state.influence += 5; }
-                    else if (next && next.action === 'repairShip') { state.player.hp = state.player.maxHp; }
                 });
                 dom.dialogueChoices.appendChild(btn);
             });
@@ -186,14 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = [];
         for (let i = 0; i < 3; i++) {
             let upg;
-            if (Math.random() < 0.4) upg = generateProceduralUpgrade();
-            else if (Math.random() < 0.7) upg = weaponUpgradePool[Math.floor(Math.random()*weaponUpgradePool.length)];
-            else {
-                const itemKeys = Object.keys(ITEMS);
-                const key = itemKeys[Math.floor(Math.random()*itemKeys.length)];
-                upg = ITEMS[key];
-                upg.isItem = true;
-            }
+            if (Math.random() < 0.5) upg = generateProceduralUpgrade();
+            else upg = weaponUpgradePool[Math.floor(Math.random()*weaponUpgradePool.length)];
             const rarity = upg.rarity || 'rare';
             const cost = {common:50,uncommon:80,rare:150,epic:300}[rarity] || 100;
             items.push({ ...upg, cost });
@@ -213,11 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Buy';
             btn.addEventListener('click', () => {
                 if (state.credits >= upg.cost) {
-                    if (upg.isItem) {
-                        state.player.addItem(upg);
-                    } else {
-                        upg.apply(state.player);
-                    }
+                    upg.apply(state.player);
                     state.credits -= upg.cost;
                     dom.creditCount.textContent = state.credits;
                     updateQuestLog();
@@ -294,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
         html += createStatItem('Level', state.player.level);
         html += createStatItem('Experience', `${state.player.xp.toFixed(0)} / ${state.player.xpToNextLevel.toFixed(0)}`);
         html += createStatItem('Credits', state.credits);
-        html += createStatItem('Influence', state.influence);
         html += createStatItem('Hull Integrity', `${Math.ceil(state.player.hp)} / ${Math.ceil(state.player.maxHp)}`);
         html += createStatItem('Movement Speed', `${(state.player.speed / CONFIG.PLAYER.SPEED * 100).toFixed(0)}%`);
         html += createStatItem('Magnet Radius', `${(state.player.magnetRadius / CONFIG.PLAYER.MAGNET_RADIUS * 100).toFixed(0)}%`);
@@ -320,21 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updateInventoryUI() {
-        if (!state || !state.player) return;
-        dom.inventoryList.innerHTML = '';
-        state.player.inventory.forEach((item, idx) => {
-            const li = document.createElement('li');
-            const span = document.createElement('span');
-            span.textContent = item.name || `Item ${idx+1}`;
-            const btn = document.createElement('button');
-            btn.textContent = 'Use';
-            btn.addEventListener('click', () => state.player.useItem(item));
-            li.append(span, btn);
-            dom.inventoryList.appendChild(li);
-        });
-    }
-
     function toggleControlPanel(force) {
         const show = typeof force === 'boolean' ? force : !dom.controlPanel.classList.contains('visible');
         dom.controlPanel.classList.toggle('visible', show);
@@ -349,7 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
             skills: dom.skillOverlay,
             stats: dom.statsOverlay,
             modifiers: dom.modifiersOverlay,
-            inventory: dom.inventoryOverlay,
         };
         Object.values(map).forEach(el => {
             el.classList.remove('visible');
@@ -365,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id === 'skills') updateSkillViewer();
         if (id === 'stats') updateStatsView();
         if (id === 'modifiers') updateModifiersView();
-        if (id === 'inventory') updateInventoryUI();
     }
 
     class Entity { constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.vx = 0; this.vy = 0; this.angle = 0; this.gravity = 0; this.mass = 1; this.owner = null; } }
@@ -382,8 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.damageMultiplier = 1.0; this.fireRateMultiplier = 1.0; this.projectileSpeedMultiplier = 1.0;
             this.areaMultiplier = 1.0; this.critChance = CONFIG.PLAYER.BASE_CRIT_CHANCE; this.critDamage = CONFIG.PLAYER.BASE_CRIT_DAMAGE;
             this.pendingLevelUps = 0;
-            this.inventory = [];
-            this.influence = 0;
         }
         update(dt) {
             // Use all keys as lowercase for consistency
@@ -430,21 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.levelUpRegion = getRegionFor(this.x, this.y);
                 this.pendingLevelUps--;
                 setGameState('LEVEL_UP');
-            }
-        }
-
-        addItem(item) {
-            if (!item) return;
-            this.inventory.push(item);
-            updateInventoryUI();
-        }
-
-        useItem(item) {
-            const idx = this.inventory.indexOf(item);
-            if (idx !== -1) {
-                if (typeof item.use === 'function') item.use(this);
-                this.inventory.splice(idx, 1);
-                updateInventoryUI();
             }
         }
     }
@@ -1293,7 +1231,6 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
         nextWave();
         dom.classMenu.classList.add('hidden');
         updateDiplomacyUI();
-        updateInventoryUI();
         setGameState('PLAYING');
     }
     function pauseGame() { if (state.animationFrameId) { cancelAnimationFrame(state.animationFrameId); state.animationFrameId = null; } }
@@ -1357,10 +1294,9 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
             state.enemies.push(enemy);
         }
         if (Math.random() < 0.3) {
-            const friendlyPool = [CONFIG.ENEMY.NEUTRAL_TRADER, CONFIG.ENEMY.GALACTIC_SAGE, CONFIG.ENEMY.MECHANIC];
-            if (region.faction === FACTIONS.SAMA && Math.random() < 0.5) friendlyPool.push(CONFIG.ENEMY.SAMA_AGENT);
-            if (region.faction === FACTIONS.PIRATE && Math.random() < 0.5) friendlyPool.push(CONFIG.ENEMY.PIRATE_BROKER);
-            const npcCfg = friendlyPool[Math.floor(Math.random()*friendlyPool.length)];
+            let npcCfg = CONFIG.ENEMY.NEUTRAL_TRADER;
+            if (region.faction === FACTIONS.SAMA && Math.random() < 0.5) npcCfg = CONFIG.ENEMY.SAMA_AGENT;
+            else if (region.faction === FACTIONS.PIRATE && Math.random() < 0.5) npcCfg = CONFIG.ENEMY.PIRATE_BROKER;
             const x = region.x + Math.random() * region.width;
             const y = region.y + Math.random() * region.height;
             const npc = Enemy.create(npcCfg, x, y);
@@ -1551,21 +1487,18 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
         const region = getRegionFor(poi.x, poi.y);
         if (poi.type === POI_TYPES.DERELICT) {
             state.score += 50;
-            state.player.addItem(ITEMS.REPAIR_KIT);
         } else if (poi.type === POI_TYPES.OUTPOST) {
             state.player.hp = state.player.maxHp;
         } else if (poi.type === POI_TYPES.BLACK_MARKET) {
             if (state.player.xp >= 20) { state.player.xp -= 20; state.score += 100; }
         } else if (poi.type === POI_TYPES.TECH_DROP) {
             state.player.addXp(50);
-            state.player.addItem(ITEMS.SPEED_BOOST);
         } else if (poi.type === POI_TYPES.MISSION_DATA) {
             state.missions.forEach(m => {
                 if (!m.completed && m.poi === poi) {
                     m.completed = true;
                     state.score += 200;
                     adjustFactionRelation(m.faction, FACTIONS.NEUTRAL, 10);
-                    state.influence += 10;
                 }
             });
         }
@@ -1718,13 +1651,9 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
             if (storm) {
                 state.player.hp = Math.max(1, state.player.hp - 0.05 * dt);
                 state.speedBoost = 1.5;
-            } else if (state.speedBoostTimer <= 0) {
+            } else {
                 state.speedBoost = 1;
             }
-        }
-        if (state.speedBoostTimer > 0) {
-            state.speedBoostTimer -= dt * (1000 / CONFIG.TARGET_FPS);
-            if (state.speedBoostTimer <= 0) state.speedBoost = 1;
         }
         state.enemies.forEach(e => { if (e.isWave || e.active) e.update(dt); });
         state.projectiles.forEach(p => p.update(dt));
@@ -1858,14 +1787,6 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
             ctx.fillStyle = p.color;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        for (const st of state.structures) {
-            if (st.x + st.r < state.camera.x || st.x - st.r > state.camera.x + canvas.width ||
-                st.y + st.r < state.camera.y || st.y - st.r > state.camera.y + canvas.height) continue;
-            ctx.fillStyle = st.color;
-            ctx.beginPath();
-            ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
             ctx.fill();
         }
     }
@@ -2107,9 +2028,6 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
         dom.closeTrade.addEventListener('click', closeTrade);
         dom.closeQuests.addEventListener('click', () => {
             dom.questOverlay.classList.remove('visible');
-        });
-        if (dom.closeInventory) dom.closeInventory.addEventListener('click', () => {
-            dom.inventoryOverlay.classList.remove('visible');
         });
         if (dom.closeControlPanel) dom.closeControlPanel.addEventListener('click', () => toggleControlPanel(false));
         document.querySelectorAll('.app-icon').forEach(icon => {

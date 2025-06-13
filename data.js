@@ -192,18 +192,6 @@ const CONFIG = {
                 { id: 'mission', text: 'Sabotage a Sama shipment for us.', action: 'offerMission' },
                 { id: 'end', text: 'Maybe next time.' }
             ] },
-        GALACTIC_SAGE: { RADIUS: 10, HP: 35, SPEED: 0.7, DAMAGE: 0, XP: 0, COLOR: '#ffff99', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true,
-            DIALOGUE: [
-                { id: 'start', text: 'I hold ancient knowledge. Seek wisdom?', choices: ['Yes', 'No'], next: ['teach','end'] },
-                { id: 'teach', text: 'Your influence grows with your deeds.', action: 'increaseInfluence' },
-                { id: 'end', text: 'Farewell.' }
-            ] },
-        MECHANIC: { RADIUS: 10, HP: 30, SPEED: 0.8, DAMAGE: 0, XP: 0, COLOR: '#99ff99', BEHAVIOR: 'wander', GRAVITY: 1, FACTION: FACTIONS.NEUTRAL, FRIENDLY: true,
-            DIALOGUE: [
-                { id: 'start', text: 'Need repairs or gear?', choices: ['Repair','Leave'], next: ['repair','end'] },
-                { id: 'repair', text: 'All fixed.', action: 'repairShip' },
-                { id: 'end', text: 'Take care.' }
-            ] },
     },
     MAP: {
         WIDTH: 367200,
@@ -285,19 +273,4 @@ const rarityTiers = {
     uncommon: { weight: 6, multi: 1.8, color: 'uncommon' },
     rare: { weight: 3, multi: 3, color: 'rare' },
     epic: { weight: 1, multi: 5, color: 'epic' },
-};
-
-const ITEMS = {
-    REPAIR_KIT: {
-        id: 'repair_kit',
-        name: 'Repair Kit',
-        desc: 'Restore 50 hull integrity.',
-        use: (player) => { player.hp = Math.min(player.maxHp, player.hp + 50); },
-    },
-    SPEED_BOOST: {
-        id: 'speed_boost',
-        name: 'Speed Booster',
-        desc: 'Increase speed temporarily.',
-        use: () => { state.speedBoost = 2; state.speedBoostTimer = 5000; },
-    },
 };

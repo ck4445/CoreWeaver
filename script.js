@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
+    let starWorker;
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const bgMusic = document.getElementById('bg-music');
     let newsPopupTimeout = null;
+    starWorker = new Worker('starWorker.js');
 
     const dom = {
         hud: document.getElementById('game-hud'), waveCounter: document.getElementById('wave-counter'), scoreCounter: document.getElementById('score-counter'),
@@ -57,16 +59,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const planets = [];
         const starColors = ['#ffffff', '#ffe5b4', '#b0e0e6', '#dcdcdc'];
         const planetColors = ['#6c5ce7', '#e17055', '#00b894', '#0984e3', '#fdcb6e'];
-        const starCount = 20000;
+        const starCount = Math.ceil(width * height * 20 / (1920 * 1080));
         const planetCount = 50;
-        for (let i = 0; i < starCount; i++) {
-            stars.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                r: Math.random() * 1.5 + 0.5,
-                color: starColors[Math.floor(Math.random() * starColors.length)],
-                a: Math.random() * 0.5 + 0.5,
-            });
+        if (starWorker) {
+            starWorker.onmessage = e => {
+                if (state) state.stars = e.data;
+            };
+            starWorker.postMessage({ width, height });
+        } else {
+            for (let i = 0; i < starCount; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    r: Math.random() * 1.5 + 0.5,
+                    color: starColors[Math.floor(Math.random() * starColors.length)],
+                    a: Math.random() * 0.5 + 0.5,
+                });
+            }
         }
         for (let i = 0; i < planetCount; i++) {
             planets.push({
@@ -336,6 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.weapons = [new BasicCannon(this)];
             this.damageMultiplier = 1.0; this.fireRateMultiplier = 1.0; this.projectileSpeedMultiplier = 1.0;
             this.areaMultiplier = 1.0; this.critChance = CONFIG.PLAYER.BASE_CRIT_CHANCE; this.critDamage = CONFIG.PLAYER.BASE_CRIT_DAMAGE;
+            this.pendingLevelUps = 0;
         }
         update(dt) {
             // Use all keys as lowercase for consistency
@@ -371,12 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
         addXp(amount) {
             const bonus = (this.passives && this.passives.techXpBonus) ? 1 + this.passives.techXpBonus : 1;
             this.xp += amount * bonus;
-            if (this.xp >= this.xpToNextLevel) {
+            while (this.xp >= this.xpToNextLevel) {
                 this.xp -= this.xpToNextLevel;
                 this.level++;
                 this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER);
                 this.hp = this.maxHp;
+                this.pendingLevelUps = (this.pendingLevelUps || 0) + 1;
+            }
+            if (this.pendingLevelUps > 0 && state.gameState !== 'LEVEL_UP') {
                 state.levelUpRegion = getRegionFor(this.x, this.y);
+                this.pendingLevelUps--;
                 setGameState('LEVEL_UP');
             }
         }
@@ -393,10 +407,26 @@ document.addEventListener('DOMContentLoaded', () => {
             this.dialogue = config.DIALOGUE || null;
             this.wanderTimer = 0; this.wanderAngle = Math.random() * Math.PI * 2;
             this.isWave = false; // Added property to distinguish wave enemies
+            this.slowTimer = 0; this.slowFactor = 1;
         }
         update(dt) {
+            if (this.slowTimer > 0) {
+                this.slowTimer -= dt * (1000 / CONFIG.TARGET_FPS);
+                if (this.slowTimer <= 0) this.slowFactor = 1;
+            }
             let target = null;
-            if (!this.friendly) {
+            if (this.invasion) {
+                const foes = this.side === 'attackers' ? this.invasion.defenders : this.invasion.attackers;
+                if (foes.length) {
+                    target = foes.reduce((best, e) => {
+                        const d = (e.x - this.x) ** 2 + (e.y - this.y) ** 2;
+                        if (!best || d < best.d) return { e, d };
+                        return best;
+                    }, null);
+                    target = target ? target.e : null;
+                }
+            }
+            if (!target && !this.friendly) {
                 if (state.hostileFactions.has(this.faction)) {
                     target = state.player;
                 } else {
@@ -407,14 +437,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (target) { // Covers both wave and non-wave if a valid target is found
                 const dx = target.x - this.x; const dy = target.y - this.y; const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 0) { this.x += (dx / dist) * this.speed * dt; this.y += (dy / dist) * this.speed * dt; }
+                const spd = this.speed * this.slowFactor;
+                if (dist > 0) { this.x += (dx / dist) * spd * dt; this.y += (dy / dist) * spd * dt; }
             } else { // No target found
                 // Non-wave enemies ALWAYS wander if no other faction target. Wave enemies might also wander if player somehow disappears.
                 // For non-wave enemies, this.behavior might be 'chase', but they should wander if target is null.
                 this.wanderTimer -= dt * (1000 / CONFIG.TARGET_FPS);
                 if (this.wanderTimer <= 0) { this.wanderAngle = Math.random() * Math.PI * 2; this.wanderTimer = 1000 + Math.random() * 2000; }
-                this.x += Math.cos(this.wanderAngle) * this.speed * 0.5 * dt;
-                this.y += Math.sin(this.wanderAngle) * this.speed * 0.5 * dt;
+                const spd = this.speed * this.slowFactor * 0.5;
+                this.x += Math.cos(this.wanderAngle) * spd * dt;
+                this.y += Math.sin(this.wanderAngle) * spd * dt;
             }
         }
         findTarget() {
@@ -486,18 +518,24 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
+            const candidates = [];
+            if (state.hostileFactions.has(this.faction)) candidates.push(state.player);
+            const other = this.findTarget();
+            if (other) candidates.push(other);
+            if (this.isWave && candidates.length === 0) candidates.push(state.player);
+
             let target = null;
-            if (state.hostileFactions.has(this.faction)) {
-                target = state.player;
+            if (candidates.length) {
+                target = candidates.reduce((best, e) => {
+                    if (!best) return e;
+                    const dBest = (best.x - this.x) ** 2 + (best.y - this.y) ** 2;
+                    const dCurr = (e.x - this.x) ** 2 + (e.y - this.y) ** 2;
+                    return dCurr < dBest ? e : best;
+                }, null);
             }
-            if (!target) target = this.findTarget();
+
 let movementTarget = target;
 let firingTarget = target;
-
-if (this.isWave && !target) {
-    movementTarget = state.player;
-    firingTarget = state.player;
-}
 
 if (movementTarget) {
     const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
@@ -582,6 +620,7 @@ if (movementTarget) {
             this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
             this.lifespan = 2000;
             this.mass = config.RADIUS / 4; this.gravity = config.GRAVITY || 0;
+            this.destroyed = false;
         }
         update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.lifespan -= dt * (1000 / CONFIG.TARGET_FPS); if (this.lifespan <= 0) { this.destroy(); } }
         draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
@@ -598,7 +637,7 @@ if (movementTarget) {
             if (isNaN(amount) || !isFinite(amount)) amount = this.damage || 1; // Security: fallback if NaN
             return { amount, isCrit, attacker: this.owner };
         }
-        destroy() { state.projectiles = state.projectiles.filter(p => p !== this); }
+        destroy() { if (this.destroyed) return; this.destroyed = true; state.projectiles = state.projectiles.filter(p => p !== this); }
     }
     class EnemyProjectile extends Projectile {
         constructor(x, y, angle, config, owner) {
@@ -717,7 +756,8 @@ if (movementTarget) {
             if (this.target) {
                 const dx = this.target.x - this.owner.x; const dy = this.target.y - this.owner.y;
                 if (dx*dx + dy*dy < (this.config.RANGE * this.owner.areaMultiplier)**2) {
-                    const damageInfo = {amount: this.config.DAMAGE_PER_SECOND / (CONFIG.TARGET_FPS / this.owner.fireRateMultiplier) * this.owner.damageMultiplier, isCrit: false};
+                    const ticksPerSecond = (1000 / this.fireRate) * this.owner.fireRateMultiplier;
+                    const damageInfo = { amount: this.config.DAMAGE_PER_SECOND / ticksPerSecond * this.owner.damageMultiplier, isCrit: false };
                     this.target.takeDamage(damageInfo);
                     createBeamParticle(this.owner.x, this.owner.y, this.target.x, this.target.y, this.config.COLOR);
                 }
@@ -786,15 +826,22 @@ if (movementTarget) {
     class ChainLightningProjectile extends Projectile {
         constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.bounces = config.BOUNCES; this.bounceRange = config.BOUNCE_RANGE; this.hitEnemies = new Set(); }
         onHit(enemy) {
-            this.hitEnemies.add(enemy); this.bounces--;
-            if (this.bounces > 0) {
-                const nextTarget = state.enemies.filter(e => !this.hitEnemies.has(e) && (e.x-this.x)**2 + (e.y-this.y)**2 < (this.bounceRange * (this.owner ? this.owner.areaMultiplier : 1))**2).sort((a,b) => (a.x-this.x)**2+(a.y-this.y)**2 - (b.x-this.x)**2+(b.y-this.y)**2)[0];
-                if (nextTarget) {
-                    createBeamParticle(this.x, this.y, nextTarget.x, nextTarget.y, this.color);
-                    this.x = nextTarget.x; this.y = nextTarget.y;
-                    nextTarget.takeDamage(this.getDamage()); this.onHit(nextTarget);
-                } else { this.destroy(); }
-            } else { this.destroy(); }
+            let current = enemy;
+            this.hitEnemies.add(current);
+            this.bounces--;
+            while (this.bounces > 0) {
+                const nextTarget = state.enemies
+                    .filter(e => !this.hitEnemies.has(e) && (e.x - this.x) ** 2 + (e.y - this.y) ** 2 < (this.bounceRange * (this.owner ? this.owner.areaMultiplier : 1)) ** 2)
+                    .sort((a, b) => (a.x - this.x) ** 2 + (a.y - this.y) ** 2 - ((b.x - this.x) ** 2 + (b.y - this.y) ** 2))[0];
+                if (!nextTarget) break;
+                createBeamParticle(this.x, this.y, nextTarget.x, nextTarget.y, this.color);
+                this.x = nextTarget.x; this.y = nextTarget.y;
+                nextTarget.takeDamage(this.getDamage());
+                current = nextTarget;
+                this.hitEnemies.add(current);
+                this.bounces--;
+            }
+            this.destroy();
         }
     }
     class ChainLightningWeapon extends Weapon {
@@ -847,10 +894,133 @@ if (movementTarget) {
     }
     class ForceFieldWeapon extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.FORCE_FIELD }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new ForcePulseProjectile(this.owner.x, this.owner.y, this.config, this.owner)); } }
 
-    class SamaPulseGun extends Weapon {
-        constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SAMA_PULSE }; this.fireRate = this.config.FIRE_RATE; }
-        fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Projectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+class SamaPulseGun extends Weapon {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SAMA_PULSE }; this.fireRate = this.config.FIRE_RATE; }
+    fire() { if (state.projectiles.length < 1000) state.projectiles.push(new Projectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+}
+
+class ScatterCannon extends Weapon {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SCATTER }; this.fireRate = this.config.FIRE_RATE; }
+    fire() {
+        const count = this.config.COUNT || 5;
+        const spread = 0.6;
+        for (let i = 0; i < count && state.projectiles.length < 1000; i++) {
+            const angle = this.owner.angle + (i - (count - 1) / 2) * spread;
+            state.projectiles.push(new Projectile(this.owner.x, this.owner.y, angle, this.config, this.owner));
+        }
     }
+}
+
+class PulseBombProjectile extends Projectile {
+    destroy() {
+        if (this.destroyed) return;
+        const count = this.config.SHARD_COUNT || 8;
+        for (let i = 0; i < count && state.projectiles.length < 1000; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const cfg = { ...CONFIG.WEAPONS.SCATTER, DAMAGE: this.config.SHARD_DAMAGE, SPEED: this.config.SPEED * 1.5 };
+            state.projectiles.push(new Projectile(this.x, this.y, angle, cfg, this.owner));
+        }
+        super.destroy();
+    }
+}
+class PulseBombLauncher extends Weapon {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.PULSE_BOMB }; this.fireRate = this.config.FIRE_RATE; }
+    fire() { if (state.projectiles.length < 1000) state.projectiles.push(new PulseBombProjectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+}
+
+class FrostBeam extends LaserBeam {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.FROST_BEAM }; }
+    fire() {
+        super.fire();
+        if (this.target) {
+            this.target.slowFactor = 1 - this.config.SLOW;
+            this.target.slowTimer = 500;
+        }
+    }
+}
+
+class Turret extends Entity {
+    constructor(x, y, config, owner) {
+        super(x, y, 6);
+        this.owner = owner; this.config = config; this.weapon = new ChainLightningWeapon(this); this.weapon.fireRate = 300; this.lifespan = config.DURATION;
+    }
+    update(dt) {
+        this.weapon.update(dt);
+        this.lifespan -= dt * (1000 / CONFIG.TARGET_FPS);
+        if (this.lifespan <= 0) this.destroy();
+    }
+    destroy() { state.drones = state.drones.filter(d => d !== this); }
+    draw() { ctx.fillStyle = this.config.COLOR; ctx.fillRect(this.x - 4, this.y - 4, 8, 8); }
+}
+class TurretDeployer extends Weapon {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.TURRET }; this.fireRate = this.config.FIRE_RATE; }
+    fire() { if (state.drones.length < 5) { const t = new Turret(this.owner.x, this.owner.y, this.config, this.owner); state.drones.push(t); } }
+}
+
+class PoisonCloud extends Projectile {
+    constructor(x, y, config, owner) { super(x, y, 0, config, owner); this.vx = 0; this.vy = 0; this.lifespan = 1000; }
+    update(dt) {
+        this.lifespan -= dt * (1000 / CONFIG.TARGET_FPS);
+        if (this.lifespan <= 0) this.destroy();
+        for (const e of state.enemies) {
+            if ((e.x - this.x) ** 2 + (e.y - this.y) ** 2 < this.config.CLOUD_RADIUS ** 2) {
+                e.takeDamage({ amount: this.config.CLOUD_DAMAGE * dt / (1000 / CONFIG.TARGET_FPS), isCrit: false, attacker: this.owner });
+            }
+        }
+    }
+    draw() { ctx.fillStyle = 'rgba(124,181,24,0.5)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.config.CLOUD_RADIUS, 0, Math.PI * 2); ctx.fill(); }
+}
+class SporeProjectile extends Projectile {
+    destroy() {
+        if (this.destroyed) return;
+        state.projectiles.push(new PoisonCloud(this.x, this.y, this.config, this.owner));
+        super.destroy();
+    }
+}
+class SporeLauncher extends Weapon {
+    constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SPORE }; this.fireRate = this.config.FIRE_RATE; }
+    fire() { if (state.projectiles.length < 1000) state.projectiles.push(new SporeProjectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); }
+}
+
+class MiniBlackHoleWeapon extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.MINI_BLACK_HOLE }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new BlackHoleProjectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); } }
+
+class SwarmBotFactory extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SWARM_BOT }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.drones.length < 10) state.drones.push(new Drone(this.owner.x, this.owner.y, this.config, this.owner)); } }
+
+class ShockwaveProjectile extends ForcePulseProjectile {
+    update(dt) {
+        super.update(dt);
+        for (const e of state.enemies) {
+            if (this.hitEnemies.has(e)) continue;
+            if ((e.x - this.owner.x) ** 2 + (e.y - this.owner.y) ** 2 < this.radius ** 2) {
+                e.takeDamage({ amount: this.config.DAMAGE * dt / (1000 / CONFIG.TARGET_FPS), isCrit: false, attacker: this.owner });
+                this.hitEnemies.add(e);
+            }
+        }
+    }
+}
+class ShockwaveEmitter extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.SHOCKWAVE }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new ShockwaveProjectile(this.owner.x, this.owner.y, this.config, this.owner)); } }
+
+class BouncingProjectile extends Projectile {
+    constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.bounces = config.BOUNCES; }
+    onHit(enemy) {
+        this.bounces--;
+        if (this.bounces <= 0) { this.destroy(); return; }
+        const next = state.enemies.filter(e => e !== enemy).sort((a,b)=>{const d1=(a.x-this.x)**2+(a.y-this.y)**2;const d2=(b.x-this.x)**2+(b.y-this.y)**2;return d1-d2;})[0];
+        if (next) {
+            const angle = Math.atan2(next.y - enemy.y, next.x - enemy.x);
+            this.x = enemy.x; this.y = enemy.y; this.vx = Math.cos(angle) * this.config.SPEED; this.vy = Math.sin(angle) * this.config.SPEED;
+        } else {
+            this.destroy();
+        }
+    }
+}
+class BouncerGun extends Weapon { constructor(owner) { super(owner); this.config = { ...CONFIG.WEAPONS.BOUNCER }; this.fireRate = this.config.FIRE_RATE; } fire() { if (state.projectiles.length < 1000) state.projectiles.push(new BouncingProjectile(this.owner.x, this.owner.y, this.owner.angle, this.config, this.owner)); } }
+
+class SplitProjectile extends Projectile {
+    constructor(x,y,angle,config,owner){ super(x,y,angle,config,owner); this.timer = config.SPLIT_TIME; }
+    update(dt){ super.update(dt); this.timer -= dt * (1000 / CONFIG.TARGET_FPS); if (this.timer <=0){ const angles=[this.angle+0.2,this.angle-0.2]; for(const a of angles){ state.projectiles.push(new Projectile(this.x,this.y,a,this.config,this.owner)); } this.destroy(); } }
+}
+class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.config={...CONFIG.WEAPONS.SPLIT_SHOT}; this.fireRate=this.config.FIRE_RATE; } fire(){ if(state.projectiles.length<1000) state.projectiles.push(new SplitProjectile(this.owner.x,this.owner.y,this.owner.angle,this.config,this.owner)); } }
 
     const weaponConstructors = new Map([
         ['add_cannon', BasicCannon],
@@ -866,6 +1036,16 @@ if (movementTarget) {
         ['add_drone_factory', DroneFactoryWeapon],
         ['add_force_field', ForceFieldWeapon],
         ['add_sama_pulse', SamaPulseGun],
+        ['add_scatter', ScatterCannon],
+        ['add_pulse_bomb', PulseBombLauncher],
+        ['add_frost_beam', FrostBeam],
+        ['add_turret', TurretDeployer],
+        ['add_spore_launcher', SporeLauncher],
+        ['add_mini_black_hole', MiniBlackHoleWeapon],
+        ['add_swarm_bots', SwarmBotFactory],
+        ['add_shockwave', ShockwaveEmitter],
+        ['add_bouncer', BouncerGun],
+        ['add_split_shot', SplitShotGun],
     ]);
 
     const weaponNameMap = {
@@ -882,6 +1062,16 @@ if (movementTarget) {
         DRONE_FACTORY: DroneFactoryWeapon,
         FORCE_FIELD: ForceFieldWeapon,
         SAMA_PULSE: SamaPulseGun,
+        SCATTER: ScatterCannon,
+        PULSE_BOMB: PulseBombLauncher,
+        FROST_BEAM: FrostBeam,
+        TURRET: TurretDeployer,
+        SPORE: SporeLauncher,
+        MINI_BLACK_HOLE: MiniBlackHoleWeapon,
+        SWARM_BOT: SwarmBotFactory,
+        SHOCKWAVE: ShockwaveEmitter,
+        BOUNCER: BouncerGun,
+        SPLIT_SHOT: SplitShotGun,
     };
 
     function weaponNameToClass(name) {
@@ -971,6 +1161,10 @@ if (movementTarget) {
             }
         }
         setGameState('PLAYING');
+        if (player.pendingLevelUps > 0) {
+            player.pendingLevelUps--;
+            setGameState('LEVEL_UP');
+        }
     }
 
     function setGameState(newState) {
@@ -1222,9 +1416,18 @@ if (movementTarget) {
             defenders: [],
         };
 
+        const defenderCenter = {
+            x: targetRegion.x + targetRegion.width / 2,
+            y: targetRegion.y + targetRegion.height / 2,
+        };
+        const attackerCenter = {
+            x: defenderCenter.x + 80,
+            y: defenderCenter.y + 80,
+        };
+
         for (let i = 0; i < 4; i++) {
-            const ax = targetRegion.x + Math.random() * targetRegion.width;
-            const ay = targetRegion.y + Math.random() * targetRegion.height;
+            const ax = attackerCenter.x + (Math.random() - 0.5) * 30;
+            const ay = attackerCenter.y + (Math.random() - 0.5) * 30;
             const enemyA = Enemy.create(CONFIG.ENEMY.SAMA_TROOP, ax, ay);
             enemyA.faction = attacker;
             enemyA.active = true;
@@ -1236,8 +1439,8 @@ if (movementTarget) {
             invasion.attackers.push(enemyA);
             state.enemies.push(enemyA);
 
-            const dx = targetRegion.x + Math.random() * targetRegion.width;
-            const dy = targetRegion.y + Math.random() * targetRegion.height;
+            const dx = defenderCenter.x + (Math.random() - 0.5) * 30;
+            const dy = defenderCenter.y + (Math.random() - 0.5) * 30;
             const enemyD = Enemy.create(CONFIG.ENEMY.CHASER, dx, dy);
             enemyD.faction = defender;
             enemyD.active = true;
@@ -1323,6 +1526,7 @@ if (movementTarget) {
         }
 
         const checkPair = (e1, e2) => {
+            if (e1.destroyed || e2.destroyed) return;
             const dx = e1.x - e2.x; const dy = e1.y - e2.y;
             if ((dx * dx + dy * dy) < (e1.radius + e2.radius) * (e1.radius + e2.radius)) {
                 if (e1 instanceof Player && e2 instanceof Enemy && !e2.friendly) e1.takeDamage(e2.damage);
@@ -1346,11 +1550,13 @@ if (movementTarget) {
             }
         };
         const handleProjectileEnemy = (p, e) => {
+            if (p.destroyed || e.destroyed) return;
             if (p.owner === e) return;
             if (p instanceof EnemyProjectile && p.owner && p.owner.faction === e.faction) return;
             if (p instanceof ForcePulseProjectile) { if (p.hitEnemies.has(e)) return; const angle = Math.atan2(e.y-p.owner.y, e.x-p.owner.x); e.vx += Math.cos(angle) * p.config.PUSH_FORCE / e.mass; e.vy += Math.sin(angle) * p.config.PUSH_FORCE / e.mass; p.hitEnemies.add(e); return; }
-            if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
+            if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e) || p.destroyed) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
             if (p instanceof ChainLightningProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.onHit(e); return; }
+            if (p instanceof BouncingProjectile) { if (p.hitEnemies && p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); if(!p.hitEnemies) p.hitEnemies=new Set(); p.hitEnemies.add(e); p.onHit(e); return; }
             if (p instanceof KineticSlash) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); return; }
             if (p instanceof BlackHoleProjectile) return;
             e.takeDamage(p.getDamage());
@@ -1375,7 +1581,7 @@ if (movementTarget) {
         const physicalEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.drones];
 
         for (const entity of physicalEntities) {
-            if (!entity) continue;
+            if (!entity || entity.destroyed) continue;
             const cellX = Math.floor(entity.x / CONFIG.SPATIAL_GRID_CELL_SIZE);
             const cellY = Math.floor(entity.y / CONFIG.SPATIAL_GRID_CELL_SIZE);
 
@@ -1384,7 +1590,7 @@ if (movementTarget) {
                     const key = `${cellX + i}|${cellY + j}`;
                     if (spatialGrid.has(key)) {
                         for (const source of spatialGrid.get(key)) {
-                            if (entity === source || entity.owner === source || !source.gravity) continue;
+                            if (entity === source || entity.owner === source || !source.gravity || source.destroyed) continue;
                             if (entity instanceof Projectile && source instanceof Projectile) continue;
                             const dx = source.x - entity.x;
                             const dy = source.y - entity.y;

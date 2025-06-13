@@ -102,17 +102,17 @@ function generateMapRegions(width, height) {
             faction = FACTIONS.PIRATE;
             name = 'Pirate Outpost';
             color = '#331f20';
-            music = 'pirate_outpost.ogg';
+            music = 'assets/pirate_outpost.ogg';
         } else if (idx < pirateCount + samaCount) {
             faction = FACTIONS.SAMA;
             name = 'Sama Enclave';
             color = '#203030';
-            music = 'sama_enclave.ogg';
+            music = 'assets/sama_enclave.ogg';
         } else {
             faction = null;
             name = 'Dead Space';
             color = '#222831';
-            music = 'dead_space.ogg';
+            music = 'assets/dead_space.ogg';
         }
         regions.push({
             ...shape,
@@ -217,6 +217,16 @@ const CONFIG = {
         DRONE_FACTORY: { FIRE_RATE: 4000, DRONE_HP: 10, DRONE_DMG: 15, DRONE_SPD: 2.5, DRONE_RADIUS: 5, COLOR: '#ADFF2F', GRAVITY: 4 },
         FORCE_FIELD: { FIRE_RATE: 2500, RADIUS: 150, DURATION: 200, PUSH_FORCE: 25, COLOR: '#ade8f4', GRAVITY: 0 },
         SAMA_PULSE: { FIRE_RATE: 800, DAMAGE: 20, SPEED: 6, RADIUS: 4, COLOR: '#b5838d', GRAVITY: 1 },
+        SCATTER: { FIRE_RATE: 600, DAMAGE: 8, SPEED: 7, RADIUS: 3, COLOR: '#bb4430', COUNT: 5, GRAVITY: 0.3 },
+        PULSE_BOMB: { FIRE_RATE: 1800, DAMAGE: 20, SPEED: 3, RADIUS: 6, COLOR: '#ff9f1c', SHARD_COUNT: 8, SHARD_DAMAGE: 5, GRAVITY: 2 },
+        FROST_BEAM: { DAMAGE_PER_SECOND: 15, RANGE: 250, COLOR: '#00f0ff', SLOW: 0.5, GRAVITY: 0 },
+        TURRET: { FIRE_RATE: 5000, DURATION: 8000, COLOR: '#c0ffee', GRAVITY: 0 },
+        SPORE: { FIRE_RATE: 1500, DAMAGE: 10, SPEED: 5, RADIUS: 4, COLOR: '#7cb518', CLOUD_DAMAGE: 3, CLOUD_RADIUS: 60, GRAVITY: 1 },
+        MINI_BLACK_HOLE: { FIRE_RATE: 3000, DAMAGE: 40, SPEED: 2, RADIUS: 8, COLOR: '#5e548e', DURATION: 2000, GRAVITY: 100, EXPLOSION_RADIUS: 80 },
+        SWARM_BOT: { FIRE_RATE: 4000, BOT_HP: 5, BOT_DMG: 8, BOT_SPD: 2, BOT_RADIUS: 3, COLOR: '#ffb703', GRAVITY: 2 },
+        SHOCKWAVE: { FIRE_RATE: 2500, RADIUS: 120, DAMAGE: 15, PUSH_FORCE: 35, DURATION: 100, COLOR: '#adb5bd', GRAVITY: 0 },
+        BOUNCER: { FIRE_RATE: 1000, DAMAGE: 12, SPEED: 8, RADIUS: 3, COLOR: '#38b000', BOUNCES: 3, GRAVITY: 0.5 },
+        SPLIT_SHOT: { FIRE_RATE: 1400, DAMAGE: 15, SPEED: 6, RADIUS: 3, COLOR: '#ff006e', SPLIT_TIME: 300, GRAVITY: 0.3 },
     },
     PARTICLE_LIFESPAN: 1000, SPATIAL_GRID_CELL_SIZE: 150, TARGET_FPS: 60,
 };
@@ -236,6 +246,16 @@ const weaponUpgradePool = [
     { id: 'add_drone_factory', name: 'New Weapon: Drone Factory', desc: 'Deploys autonomous drones to attack enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new DroneFactoryWeapon(p)); } },
     { id: 'add_force_field', name: 'New Weapon: Force Field', desc: 'Periodically emits a pulse that pushes enemies away.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ForceFieldWeapon(p)); } },
     { id: 'add_sama_pulse', name: 'New Weapon: Sama Pulse', desc: 'Powerful shots obtainable only in Sama Space.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new SamaPulseGun(p)); } },
+    { id: 'add_scatter', name: 'New Weapon: Scatter Cannon', desc: 'Fires a spray of plasma bolts.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ScatterCannon(p)); } },
+    { id: 'add_pulse_bomb', name: 'New Weapon: Pulse Bomb', desc: 'Explodes into damaging shards.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new PulseBombLauncher(p)); } },
+    { id: 'add_frost_beam', name: 'New Weapon: Frost Beam', desc: 'Continuous beam that slows targets.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new FrostBeam(p)); } },
+    { id: 'add_turret', name: 'New Weapon: Deploy Turret', desc: 'Places an automated lightning turret.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new TurretDeployer(p)); } },
+    { id: 'add_spore_launcher', name: 'New Weapon: Spore Launcher', desc: 'Creates poisonous clouds on impact.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new SporeLauncher(p)); } },
+    { id: 'add_mini_black_hole', name: 'New Weapon: Mini Singularity', desc: 'Fires a small gravity well.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new MiniBlackHoleWeapon(p)); } },
+    { id: 'add_swarm_bots', name: 'New Weapon: Swarm Bots', desc: 'Releases tiny drones to harass foes.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new SwarmBotFactory(p)); } },
+    { id: 'add_shockwave', name: 'New Weapon: Shockwave Emitter', desc: 'Damaging radial pulse.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new ShockwaveEmitter(p)); } },
+    { id: 'add_bouncer', name: 'New Weapon: Bouncer Gun', desc: 'Shots ricochet between enemies.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new BouncerGun(p)); } },
+    { id: 'add_split_shot', name: 'New Weapon: Split Shot', desc: 'Projectiles divide mid-flight.', tag: 'NEW WEAPON', apply: (p) => { if(p.weapons.length < 8) p.weapons.push(new SplitShotGun(p)); } },
 ];
 const genericUpgradeTemplates = [
     { name: 'Damage', stat: 'damageMultiplier', base: 0.05, tag: 'OFFENSE', desc: 'Weapon damage' },

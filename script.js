@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const bgMusic = document.getElementById('bg-music');
@@ -47,39 +47,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     let state, musicStarted = false;
     const MINIMAP_VIEW = 30000;
     let mapZoom = 0.25;
-    const STAR_COLORS = ['#ffffff', '#ffe5b4', '#b0e0e6', '#dcdcdc'];
-    let workerStars = null;
-    let workerStarIdx = null;
-    let workerPlanets = null;
-    const starWorker = new Worker('starWorker.js');
-    const bgReady = new Promise(resolve => {
-        starWorker.onmessage = e => {
-            workerStars = new Float32Array(e.data.starData);
-            workerStarIdx = new Uint8Array(e.data.colorData);
-            workerPlanets = e.data.planets;
-            resolve();
-        };
-    });
-    starWorker.postMessage({ width: CONFIG.MAP.WIDTH, height: CONFIG.MAP.HEIGHT });
     const FACTION_UNIT_POOLS = {
         [FACTIONS.PIRATE]: [CONFIG.ENEMY.CHASER, CONFIG.ENEMY.SWARMER, CONFIG.ENEMY.SHOOTER],
         [FACTIONS.SAMA]: [CONFIG.ENEMY.SAMA_TROOP, CONFIG.ENEMY.SAMA_GUARD, CONFIG.ENEMY.SAMA_SNIPER],
     };
 
     function generateBackground(width, height) {
-        const starCount = 200000;
-        const planetCount = 50;
-        const stars = new Float32Array(starCount * 4);
-        const colorIdx = new Uint8Array(starCount);
-        const planetColors = ['#6c5ce7', '#e17055', '#00b894', '#0984e3', '#fdcb6e'];
-        for (let i = 0; i < starCount; i++) {
-            stars[i * 4] = Math.random() * width;
-            stars[i * 4 + 1] = Math.random() * height;
-            stars[i * 4 + 2] = Math.random() * 1.5 + 0.5;
-            stars[i * 4 + 3] = Math.random() * 0.5 + 0.5;
-            colorIdx[i] = Math.floor(Math.random() * STAR_COLORS.length);
-        }
+        const stars = [];
         const planets = [];
+        const starColors = ['#ffffff', '#ffe5b4', '#b0e0e6', '#dcdcdc'];
+        const planetColors = ['#6c5ce7', '#e17055', '#00b894', '#0984e3', '#fdcb6e'];
+        const starCount = 20000;
+        const planetCount = 50;
+        for (let i = 0; i < starCount; i++) {
+            stars.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                r: Math.random() * 1.5 + 0.5,
+                color: starColors[Math.floor(Math.random() * starColors.length)],
+                a: Math.random() * 0.5 + 0.5,
+            });
+        }
         for (let i = 0; i < planetCount; i++) {
             planets.push({
                 x: Math.random() * width,
@@ -88,20 +76,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 color: planetColors[Math.floor(Math.random() * planetColors.length)],
             });
         }
-        return { stars, colorIdx, planets };
+        return { stars, planets };
     }
     function getInitialState() {
-        let bg;
-        if (workerStars && workerStarIdx && workerPlanets) {
-            bg = { stars: workerStars, colorIdx: workerStarIdx, planets: workerPlanets };
-        } else {
-            bg = generateBackground(CONFIG.MAP.WIDTH, CONFIG.MAP.HEIGHT);
-        }
+        const bg = generateBackground(CONFIG.MAP.WIDTH, CONFIG.MAP.HEIGHT);
         return {
             gameState: 'START', player: null, enemies: [], projectiles: [], xpOrbs: [], particles: [], drones: [], keys: {},
             mouse: { x: 0, y: 0 }, camera: { x: 0, y: 0 }, map: CONFIG.MAP, wave: 0, score: 0, gameTime: 0, lastTime: 0,
             animationFrameId: null, showMap: false, levelUpRegion: null, currentRegion: null,
-            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, starIdx: bg.colorIdx || null, planets: bg.planets,
+            hyperspaceCharge: 0, hyperspaceActive: false, stars: bg.stars, planets: bg.planets,
             autoFire: false, events: [], eventTimer: 10000, missions: [], speedBoost: 1,
             newsFeed: [], activeInvasions: [],
             hostileFactions: new Set(),
@@ -1790,22 +1773,14 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
     }
 
     function drawBackground() {
-        const stars = state.stars;
-        const idx = state.starIdx;
-        if (stars && idx) {
-            for (let i = 0, j = 0; i < stars.length; i += 4, j++) {
-                const x = stars[i];
-                const y = stars[i + 1];
-                if (x < state.camera.x - 2 || x > state.camera.x + canvas.width + 2 ||
-                    y < state.camera.y - 2 || y > state.camera.y + canvas.height + 2) continue;
-                const r = stars[i + 2];
-                const a = stars[i + 3];
-                ctx.globalAlpha = a;
-                ctx.fillStyle = STAR_COLORS[idx[j]];
-                ctx.fillRect(x, y, r, r);
-            }
-            ctx.globalAlpha = 1;
+        for (const s of state.stars) {
+            if (s.x < state.camera.x - 2 || s.x > state.camera.x + canvas.width + 2 ||
+                s.y < state.camera.y - 2 || s.y > state.camera.y + canvas.height + 2) continue;
+            ctx.globalAlpha = s.a;
+            ctx.fillStyle = s.color;
+            ctx.fillRect(s.x, s.y, s.r, s.r);
         }
+        ctx.globalAlpha = 1;
         for (const p of state.planets) {
             if (p.x + p.r < state.camera.x || p.x - p.r > state.camera.x + canvas.width ||
                 p.y + p.r < state.camera.y || p.y - p.r > state.camera.y + canvas.height) continue;
@@ -2075,6 +2050,5 @@ class SplitShotGun extends Weapon { constructor(owner){ super(owner); this.confi
         setGameState('START');
     }
 
-    await bgReady;
     init();
 });

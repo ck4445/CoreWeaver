@@ -336,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.weapons = [new BasicCannon(this)];
             this.damageMultiplier = 1.0; this.fireRateMultiplier = 1.0; this.projectileSpeedMultiplier = 1.0;
             this.areaMultiplier = 1.0; this.critChance = CONFIG.PLAYER.BASE_CRIT_CHANCE; this.critDamage = CONFIG.PLAYER.BASE_CRIT_DAMAGE;
+            this.pendingLevelUps = 0;
         }
         update(dt) {
             // Use all keys as lowercase for consistency
@@ -371,12 +372,16 @@ document.addEventListener('DOMContentLoaded', () => {
         addXp(amount) {
             const bonus = (this.passives && this.passives.techXpBonus) ? 1 + this.passives.techXpBonus : 1;
             this.xp += amount * bonus;
-            if (this.xp >= this.xpToNextLevel) {
+            while (this.xp >= this.xpToNextLevel) {
                 this.xp -= this.xpToNextLevel;
                 this.level++;
                 this.xpToNextLevel = Math.floor(this.xpToNextLevel * CONFIG.PLAYER.XP_LEVEL_MULTIPLIER);
                 this.hp = this.maxHp;
+                this.pendingLevelUps = (this.pendingLevelUps || 0) + 1;
+            }
+            if (this.pendingLevelUps > 0 && state.gameState !== 'LEVEL_UP') {
                 state.levelUpRegion = getRegionFor(this.x, this.y);
+                this.pendingLevelUps--;
                 setGameState('LEVEL_UP');
             }
         }
@@ -486,18 +491,24 @@ document.addEventListener('DOMContentLoaded', () => {
     class ShooterEnemy extends Enemy {
         constructor(x, y, config) { super(x, y, config); this.fireCooldown = config.FIRE_RATE; }
         update(dt) {
+            const candidates = [];
+            if (state.hostileFactions.has(this.faction)) candidates.push(state.player);
+            const other = this.findTarget();
+            if (other) candidates.push(other);
+            if (this.isWave && candidates.length === 0) candidates.push(state.player);
+
             let target = null;
-            if (state.hostileFactions.has(this.faction)) {
-                target = state.player;
+            if (candidates.length) {
+                target = candidates.reduce((best, e) => {
+                    if (!best) return e;
+                    const dBest = (best.x - this.x) ** 2 + (best.y - this.y) ** 2;
+                    const dCurr = (e.x - this.x) ** 2 + (e.y - this.y) ** 2;
+                    return dCurr < dBest ? e : best;
+                }, null);
             }
-            if (!target) target = this.findTarget();
+
 let movementTarget = target;
 let firingTarget = target;
-
-if (this.isWave && !target) {
-    movementTarget = state.player;
-    firingTarget = state.player;
-}
 
 if (movementTarget) {
     const dx = movementTarget.x - this.x; const dy = movementTarget.y - this.y;
@@ -582,6 +593,7 @@ if (movementTarget) {
             this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
             this.lifespan = 2000;
             this.mass = config.RADIUS / 4; this.gravity = config.GRAVITY || 0;
+            this.destroyed = false;
         }
         update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.lifespan -= dt * (1000 / CONFIG.TARGET_FPS); if (this.lifespan <= 0) { this.destroy(); } }
         draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
@@ -598,7 +610,7 @@ if (movementTarget) {
             if (isNaN(amount) || !isFinite(amount)) amount = this.damage || 1; // Security: fallback if NaN
             return { amount, isCrit, attacker: this.owner };
         }
-        destroy() { state.projectiles = state.projectiles.filter(p => p !== this); }
+        destroy() { if (this.destroyed) return; this.destroyed = true; state.projectiles = state.projectiles.filter(p => p !== this); }
     }
     class EnemyProjectile extends Projectile {
         constructor(x, y, angle, config, owner) {
@@ -717,7 +729,8 @@ if (movementTarget) {
             if (this.target) {
                 const dx = this.target.x - this.owner.x; const dy = this.target.y - this.owner.y;
                 if (dx*dx + dy*dy < (this.config.RANGE * this.owner.areaMultiplier)**2) {
-                    const damageInfo = {amount: this.config.DAMAGE_PER_SECOND / (CONFIG.TARGET_FPS / this.owner.fireRateMultiplier) * this.owner.damageMultiplier, isCrit: false};
+                    const ticksPerSecond = (1000 / this.fireRate) * this.owner.fireRateMultiplier;
+                    const damageInfo = { amount: this.config.DAMAGE_PER_SECOND / ticksPerSecond * this.owner.damageMultiplier, isCrit: false };
                     this.target.takeDamage(damageInfo);
                     createBeamParticle(this.owner.x, this.owner.y, this.target.x, this.target.y, this.config.COLOR);
                 }
@@ -786,15 +799,22 @@ if (movementTarget) {
     class ChainLightningProjectile extends Projectile {
         constructor(x, y, angle, config, owner) { super(x, y, angle, config, owner); this.bounces = config.BOUNCES; this.bounceRange = config.BOUNCE_RANGE; this.hitEnemies = new Set(); }
         onHit(enemy) {
-            this.hitEnemies.add(enemy); this.bounces--;
-            if (this.bounces > 0) {
-                const nextTarget = state.enemies.filter(e => !this.hitEnemies.has(e) && (e.x-this.x)**2 + (e.y-this.y)**2 < (this.bounceRange * (this.owner ? this.owner.areaMultiplier : 1))**2).sort((a,b) => (a.x-this.x)**2+(a.y-this.y)**2 - (b.x-this.x)**2+(b.y-this.y)**2)[0];
-                if (nextTarget) {
-                    createBeamParticle(this.x, this.y, nextTarget.x, nextTarget.y, this.color);
-                    this.x = nextTarget.x; this.y = nextTarget.y;
-                    nextTarget.takeDamage(this.getDamage()); this.onHit(nextTarget);
-                } else { this.destroy(); }
-            } else { this.destroy(); }
+            let current = enemy;
+            this.hitEnemies.add(current);
+            this.bounces--;
+            while (this.bounces > 0) {
+                const nextTarget = state.enemies
+                    .filter(e => !this.hitEnemies.has(e) && (e.x - this.x) ** 2 + (e.y - this.y) ** 2 < (this.bounceRange * (this.owner ? this.owner.areaMultiplier : 1)) ** 2)
+                    .sort((a, b) => (a.x - this.x) ** 2 + (a.y - this.y) ** 2 - ((b.x - this.x) ** 2 + (b.y - this.y) ** 2))[0];
+                if (!nextTarget) break;
+                createBeamParticle(this.x, this.y, nextTarget.x, nextTarget.y, this.color);
+                this.x = nextTarget.x; this.y = nextTarget.y;
+                nextTarget.takeDamage(this.getDamage());
+                current = nextTarget;
+                this.hitEnemies.add(current);
+                this.bounces--;
+            }
+            this.destroy();
         }
     }
     class ChainLightningWeapon extends Weapon {
@@ -971,6 +991,10 @@ if (movementTarget) {
             }
         }
         setGameState('PLAYING');
+        if (player.pendingLevelUps > 0) {
+            player.pendingLevelUps--;
+            setGameState('LEVEL_UP');
+        }
     }
 
     function setGameState(newState) {
@@ -1323,6 +1347,7 @@ if (movementTarget) {
         }
 
         const checkPair = (e1, e2) => {
+            if (e1.destroyed || e2.destroyed) return;
             const dx = e1.x - e2.x; const dy = e1.y - e2.y;
             if ((dx * dx + dy * dy) < (e1.radius + e2.radius) * (e1.radius + e2.radius)) {
                 if (e1 instanceof Player && e2 instanceof Enemy && !e2.friendly) e1.takeDamage(e2.damage);
@@ -1346,10 +1371,11 @@ if (movementTarget) {
             }
         };
         const handleProjectileEnemy = (p, e) => {
+            if (p.destroyed || e.destroyed) return;
             if (p.owner === e) return;
             if (p instanceof EnemyProjectile && p.owner && p.owner.faction === e.faction) return;
             if (p instanceof ForcePulseProjectile) { if (p.hitEnemies.has(e)) return; const angle = Math.atan2(e.y-p.owner.y, e.x-p.owner.x); e.vx += Math.cos(angle) * p.config.PUSH_FORCE / e.mass; e.vy += Math.sin(angle) * p.config.PUSH_FORCE / e.mass; p.hitEnemies.add(e); return; }
-            if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
+            if (p instanceof RailgunProjectile) { if (p.hitEnemies.has(e) || p.destroyed) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); p.penetration--; if (p.penetration <= 0) p.destroy(); return; }
             if (p instanceof ChainLightningProjectile) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.onHit(e); return; }
             if (p instanceof KineticSlash) { if (p.hitEnemies.has(e)) return; e.takeDamage(p.getDamage()); p.hitEnemies.add(e); return; }
             if (p instanceof BlackHoleProjectile) return;
@@ -1375,7 +1401,7 @@ if (movementTarget) {
         const physicalEntities = [state.player, ...activeEnemies, ...state.projectiles, ...state.drones];
 
         for (const entity of physicalEntities) {
-            if (!entity) continue;
+            if (!entity || entity.destroyed) continue;
             const cellX = Math.floor(entity.x / CONFIG.SPATIAL_GRID_CELL_SIZE);
             const cellY = Math.floor(entity.y / CONFIG.SPATIAL_GRID_CELL_SIZE);
 
@@ -1384,7 +1410,7 @@ if (movementTarget) {
                     const key = `${cellX + i}|${cellY + j}`;
                     if (spatialGrid.has(key)) {
                         for (const source of spatialGrid.get(key)) {
-                            if (entity === source || entity.owner === source || !source.gravity) continue;
+                            if (entity === source || entity.owner === source || !source.gravity || source.destroyed) continue;
                             if (entity instanceof Projectile && source instanceof Projectile) continue;
                             const dx = source.x - entity.x;
                             const dy = source.y - entity.y;
